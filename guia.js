@@ -1,3 +1,13 @@
+function showCoords(element, latitude, longitude, precisao) {
+	// Display coordinates first
+	element.innerHTML = `
+                        <p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>
+                        <strong>Longitude:</strong> ${longitude.toFixed(6)}<br>
+                        <strong>Precisão:</strong> ±${Math.round(accuracy)} metros</p>
+                        <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a></p>
+                        `;
+}
+
 function getLocation() {
 	console.log("início getLocation()...");
 	const myLocation = document.getElementById("myLocation");
@@ -14,17 +24,11 @@ function getLocation() {
 		// Success callback
 		const latitude = position.coords.latitude;
 		const longitude = position.coords.longitude;
-		const accuracy = position.coords.accuracy; // in meters
+		const precisao = position.coords.accuracy; // in meters
 
 		// Store coordinates
 		currentCoords = { latitude, longitude };
 
-		// Display coordinates first
-		myLocation.innerHTML = `
-                        <p><strong>Latitude:</strong> ${latitude.toFixed(6)}</p>
-                        <p><strong>Longitude:</strong> ${longitude.toFixed(6)}</p>
-                        <p><strong>Accuracy:</strong> ±${Math.round(accuracy)} meters</p>
-                        <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a></p>
-                        `;
+		showCoords(element, latitude, longitude, precisao);
 	});
 }
