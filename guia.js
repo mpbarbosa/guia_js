@@ -20,7 +20,7 @@ function getLocation() {
 		currentCoords = { latitude, longitude };
 
 		// Display coordinates first
-		locationResult.innerHTML = `
+		myLocation.innerHTML = `
                         <p><strong>Latitude:</strong> ${latitude.toFixed(6)}</p>
                         <p><strong>Longitude:</strong> ${longitude.toFixed(6)}</p>
                         <p><strong>Accuracy:</strong> ±${Math.round(accuracy)} meters</p>
