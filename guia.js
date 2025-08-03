@@ -8,6 +8,20 @@ function showCoords(element, latitude, longitude, precisao) {
                         `;
 }
 
+function renderAddress(address) {
+	return `<p>Logradouro/Número: ${address.address.road}, ${address.address.house_number}<br>
+    Bairro: ${address.address.suburb}<br>
+    Município/Cidade: ${address.address.city}<br>
+    ${address.address.municipality}<br>
+    ${address.address.county}<br>
+    UF: ${address.address.state}<br>
+    Região: ${address.address.region}<br>
+    CEP: ${address.address.postcode}<br>
+    País: ${address.address.country}<br>
+    Código do país: ${address.address.country_code}<br>
+    Boundingbox: ${address.boundingbox} </p>`;
+}
+
 function getLocation() {
 	console.log("início getLocation()...");
 	const myLocation = document.getElementById("myLocation");
