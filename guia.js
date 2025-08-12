@@ -32,8 +32,10 @@ function checkGeolocation(element) {
 	// Check if geolocation is supported by the browser
 	if (!navigator.geolocation) {
 		element.innerHTML =
-			'<p class="error">Geolocation is not supported by your browser.</p>';
-		return;
+			'<p class="error">O seu navegador não tem a funcionalidade de geolocalização.</p>';
+	} else {
+		element.innerHTML +=
+			"<p>O seu navegador tem a funcionalidade de geolocalização.</p>";
 	}
 }
 
@@ -106,28 +108,73 @@ function renderAddress(data) {
 	return html;
 }
 
-function getLocation() {
-	const myLocation = document.getElementById("myLocation");
-	myLocation.innerHTML = "Carregando a localização atual...";
+function getSingleLocationUpdate() {
+	console.log("getSingleLocationUpdate");
+	locationResult.innerHTML =
+		'<p class="loading">Buscando a sua localização...</p>';
 
-	// Check if geolocation is supported by the browser
-	if (!navigator.geolocation) {
-		locationResult.innerHTML =
-			'<p class="error">Geolocalização não é implementada pelo seu navegador.</p>';
-	}
+	getCurrentLocation()
+		.then((position) => {
+			displayPosition(position);
+		})
+		.catch((error) => {
+			displayError(error);
+		});
+}
 
-	// Get current position
-	navigator.geolocation.getCurrentPosition(async (position) => {
-		// Success callback
-		const latitude = position.coords.latitude;
-		const longitude = position.coords.longitude;
-		const precisao = position.coords.accuracy; // in meters
+function startTrecking() {
+	// Set up event listeners
+	speakBtn.addEventListener("click", speak);
+	pauseBtn.addEventListener("click", pauseSpeech);
+	resumeBtn.addEventListener("click", resumeSpeech);
+	stopBtn.addEventListener("click", stopSpeech);
+	languageSelect.addEventListener("change", loadVoices);
+	rateInput.addEventListener("input", updateRate);
+	pitchInput.addEventListener("input", updatePitch);
 
-		// Store coordinates
-		currentCoords = { latitude, longitude };
+	/*
+  Get current location. Do an initial check to see
+  if the user has granted location permissions. Do an immediate
+  update.
+  */
 
-		//TODO: qual o valor da variável element?
-		showCoords(element, latitude, longitude, precisao);
+	getSingleLocationUpdate();
+
+	// Then set up periodic updates
+	trackingInterval = setInterval(() => {
+		getCurrentLocation()
+			.then((position) => {
+				displayLocation(position);
+			})
+			.catch((error) => {
+				displayError(error);
+				// Stop the tracking interval
+				stopTracking();
+			});
+	}, 5000); // Update every 5 seconds
+}
+
+function getCurrentLocation() {
+	return new Promise(function (resolve, reject) {
+		const locationResult = document.getElementById("locationResult");
+		checkGeolocation(locationResult);
+
+		if (findRestaurantsBtn) {
+			findRestaurantsBtn.disabled = true;
+		}
+		if (cityStatsBtn) {
+			cityStatsBtn.disabled = true;
+		}
+		currentCoords = null;
+		currentAddress = null;
+
+		console.log("getCurrentLocation");
+		// Get current position
+		navigator.geolocation.getCurrentPosition(resolve, reject, {
+			enableHighAccuracy: true,
+			maximumAge: 0, // Don't use a cached position
+			timeout: 10000, // 10 seconds
+		});
 	});
 }
 
@@ -139,4 +186,26 @@ function buildTextToSpeech(address) {
 	}
 	const fBairro = bairro ? "Bairro " + bairro : "";
 	return fBairro;
+}
+
+function displayError(error) {
+	// Error callback
+	let errorMessage;
+	switch (error.code) {
+		case error.PERMISSION_DENIED:
+			errorMessage = "User denied the request for Geolocation.";
+			break;
+		case error.POSITION_UNAVAILABLE:
+			errorMessage = "Location information is unavailable.";
+			break;
+		case error.TIMEOUT:
+			errorMessage = "The request to get user location timed out.";
+			break;
+		case error.UNKNOWN_ERROR:
+			errorMessage = "An unknown error occurred.";
+			break;
+	}
+	locationResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
+	findRestaurantsBtn.disabled = true;
+	cityStatsBtn.disabled = true;
 }
