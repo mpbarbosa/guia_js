@@ -109,13 +109,15 @@ function renderAddress(data) {
 }
 
 function getSingleLocationUpdate() {
-	console.log("getSingleLocationUpdate");
 	locationResult.innerHTML =
 		'<p class="loading">Buscando a sua localização...</p>';
 
 	getCurrentLocation()
 		.then((position) => {
 			displayPosition(position);
+		})
+		.then((position) => {
+			console.log("segundo - position:", position);
 		})
 		.catch((error) => {
 			displayError(error);
@@ -155,8 +157,7 @@ function startTrecking() {
 }
 
 function getCurrentLocation() {
-	return new Promise(function (resolve, reject) {
-		const locationResult = document.getElementById("locationResult");
+	return new Promise(async function (resolve, reject) {
 		checkGeolocation(locationResult);
 
 		if (findRestaurantsBtn) {
@@ -170,11 +171,19 @@ function getCurrentLocation() {
 
 		console.log("getCurrentLocation");
 		// Get current position
-		navigator.geolocation.getCurrentPosition(resolve, reject, {
-			enableHighAccuracy: true,
-			maximumAge: 0, // Don't use a cached position
-			timeout: 10000, // 10 seconds
-		});
+		navigator.geolocation.getCurrentPosition(
+			async (position) => {
+				resolve(position);
+			},
+			(error) => {
+				reject(error);
+			},
+			{
+				enableHighAccuracy: true,
+				maximumAge: 0, // Don't use a cached position
+				timeout: 10000, // 10 seconds
+			},
+		);
 	});
 }
 
@@ -186,6 +195,28 @@ function buildTextToSpeech(address) {
 	}
 	const fBairro = bairro ? "Bairro " + bairro : "";
 	return fBairro;
+}
+
+/* --------------
+ * Camada de GUI
+ * --------------------
+ */
+function displayPosition(position) {
+	const latitude = position.coords.latitude;
+	const longitude = position.coords.longitude;
+	const altitude = position.coords.altitude;
+	const precisao = position.coords.accuracy; // in meters
+	const precisaoAltitude = position.coords.altitudeAccuracy;
+
+	showCoords(
+		locationResult,
+		latitude,
+		longitude,
+		altitude,
+		precisao,
+		precisaoAltitude,
+	);
+	//renderAddress(position.address);
 }
 
 function displayError(error) {
