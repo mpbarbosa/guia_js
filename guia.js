@@ -1,3 +1,111 @@
+// Haversine distance calculation between two coordinates
+function calculateDistance(lat1, lon1, lat2, lon2) {
+	const R = 6371e3; // Earth radius in meters
+	const φ1 = (lat1 * Math.PI) / 180;
+	const φ2 = (lat2 * Math.PI) / 180;
+	const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+	const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+	const a =
+		Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+		Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+	return R * c;
+}
+
+class SingletonStatusManager {
+	constructor() {
+		if (SingletonStatusManager.instance) {
+			return SingletonStatusManager.instance;
+		}
+
+		this.gettingLocation = false;
+		SingletonStatusManager.instance = this;
+	}
+
+	setGettingLocation(status) {
+		this.gettingLocation = status;
+	}
+
+	static getInstace() {
+		this.instance = this.instance || new SingletonStatusManager();
+		return this.instance;
+	}
+}
+
+class APIFetcher {
+	constructor(url) {
+		this.url = url;
+		this.observers = [];
+		this.fetching = false;
+		this.data = null;
+		this.error = null;
+		this.loading = false;
+		this.lastFetch = 0;
+		this.timeout = 10000;
+		this.cache = new Map();
+		this.lastPosition = null;
+	}
+
+	subscribe(observer) {
+		this.observers.push(observer);
+	}
+
+	unsubscribe(observer) {
+		this.observers = this.observers.filter((o) => o !== observer);
+	}
+
+	notifyObservers() {
+		this.observers.forEach((observer) => {
+			observer.update(this.data, this.error, this.loading);
+		});
+	}
+
+	async fetchData() {
+		const cacheKey = this.getCacheKey();
+		if (this.cache.has(cacheKey)) {
+			this.data = this.cache.get(cacheKey);
+			this.notifyObservers();
+			return;
+		}
+		this.loading = true;
+		this.notifyObservers();
+
+		try {
+			const response = await fetch(this.url);
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			const data = await response.json();
+			this.data = data;
+			this.cache.set(cacheKey, data);
+		} catch (error) {
+			this.error = error;
+		} finally {
+			this.loading = false;
+			this.notifyObservers();
+		}
+	}
+}
+
+class ReverseGeocodeAPIFetcher extends APIFetcher {
+	constructor(latitude, longitude) {
+		const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+		super(url);
+		this.latitude = latitude;
+		this.longitude = longitude;
+	}
+
+	getCacheKey() {
+		return `${this.latitude},${this.longitude}`;
+	}
+
+	async fetchAddress() {
+		return super.fetchData();
+	}
+}
+
 function renderHtmlCoords(
 	latitude,
 	longitude,
@@ -28,43 +136,11 @@ function renderHtmlCoords(
 	return html;
 }
 
-function checkGeolocation(element) {
-	// Check if geolocation is supported by the browser
-	if (!navigator.geolocation) {
-		element.innerHTML =
-			'<p class="error">O seu navegador não tem a funcionalidade de geolocalização.</p>';
-	} else {
-		element.innerHTML +=
-			"<p>O seu navegador tem a funcionalidade de geolocalização.</p>";
-	}
-}
-
-function showCoords(
-	element,
-	latitude,
-	longitude,
-	altitude,
-	precisao,
-	precisaoAltitude,
-) {
-	// Display coordinates first
-	element.innerHTML = renderHtmlCoords(
-		latitude,
-		longitude,
-		altitude,
-		precisao,
-		precisaoAltitude,
-	);
-}
-
 function getAddressType(address) {
 	const addressClass = address.class;
 	const addressType = address.type;
 	var addressTypeDescr;
 
-	console.log("addressClass: " + addressClass);
-	console.log("addressType: " + addressType);
-	console.log(address);
 	if (addressClass == "place" && addressType == "house") {
 		addressTypeDescr = "Residencial";
 	} else if (addressClass == "shop" && addressType == "mall") {
@@ -108,23 +184,123 @@ function renderAddress(data) {
 	return html;
 }
 
-function getSingleLocationUpdate() {
-	locationResult.innerHTML =
-		'<p class="loading">Buscando a sua localização...</p>';
+async function fetchReverseGeocoding(position) {
+	const latitude = position.coords.latitude;
+	const longitude = position.coords.longitude;
 
-	getCurrentLocation()
-		.then((position) => {
-			displayPosition(position);
-		})
-		.then((position) => {
-			console.log("segundo - position:", position);
-		})
-		.catch((error) => {
-			displayError(error);
-		});
+	const fetcher = new ReverseGeocodeAPIFetcher(latitude, longitude);
+	await fetcher.fetchAddress();
+	const address = fetcher.data;
+	return address;
 }
 
-function startTrecking() {
+class GeolocationService {
+	constructor(element) {
+		this.element = element;
+		this.currentCoords = null;
+		this.currentAddress = null;
+		this.trackingInterval = null;
+		this.locationResult = null;
+		this.observers = [];
+		this.gettingLocation = false;
+	}
+
+	subscribe(observer) {
+		this.observers.push(observer);
+	}
+
+	unsubscribe(observer) {
+		this.observers = this.observers.filter((o) => o !== observer);
+	}
+
+	notifyObservers() {
+		this.observers.forEach((observer) => {
+			observer.update(this.currentCoords, this.currentAddress);
+		});
+	}
+
+	defaultOptions() {
+		return {
+			enableHighAccuracy: true,
+			maximumAge: 0, // Don't use a cached position
+			timeout: 10000, // 10 seconds
+		};
+	}
+
+	checkGeolocation() {
+		// Check if geolocation is supported by the browser
+		var element = this.locationResult;
+		if (element !== null) {
+			if (!navigator.geolocation) {
+				element.innerHTML =
+					'<p class="error">O seu navegador não tem a funcionalidade de geolocalização.</p>';
+			} else {
+				element.innerHTML +=
+					"<p>O seu navegador tem a funcionalidade de geolocalização.</p>";
+			}
+		}
+	}
+
+	async getCurrentLocation() {
+		this.checkGeolocation();
+		return new Promise(async function (resolve, reject) {
+			// Get current position
+			navigator.geolocation.getCurrentPosition(
+				async (position) => {
+					SingletonStatusManager.getInstace().setGettingLocation(true);
+
+					if (findRestaurantsBtn) {
+						findRestaurantsBtn.disabled = true;
+					}
+					if (cityStatsBtn) {
+						cityStatsBtn.disabled = true;
+					}
+					currentCoords = null;
+					currentAddress = null;
+					resolve(position);
+				},
+				(error) => {
+					reject(error);
+				},
+				{
+					enableHighAccuracy: true,
+					maximumAge: 0, // Don't use a cached position
+					timeout: 10000, // 10 seconds
+				},
+			);
+		});
+	}
+
+	getSingleLocationUpdate() {
+		locationResult.innerHTML =
+			'<p class="loading">Buscando a sua localização...</p>';
+
+		if (findRestaurantsBtn) {
+			findRestaurantsBtn.disabled = true;
+		}
+		if (cityStatsBtn) {
+			cityStatsBtn.disabled = true;
+		}
+
+		this.getCurrentLocation()
+			.then((position) => {
+				this.notifyObservers();
+				return position;
+			})
+			.then((position) => {
+				return fetchReverseGeocoding(position);
+			})
+			.then((addressData) => {
+				var html = renderAddress(addressData);
+				locationResult.innerHTML = html;
+			})
+			.catch((error) => {
+				displayError(error);
+			});
+	}
+}
+
+function startTracking() {
 	// Set up event listeners
 	speakBtn.addEventListener("click", speak);
 	pauseBtn.addEventListener("click", pauseSpeech);
@@ -141,50 +317,14 @@ function startTrecking() {
   */
 
 	getSingleLocationUpdate();
+	setTimeout(() => {
+		null;
+	}, 20000);
 
 	// Then set up periodic updates
 	trackingInterval = setInterval(() => {
-		getCurrentLocation()
-			.then((position) => {
-				displayLocation(position);
-			})
-			.catch((error) => {
-				displayError(error);
-				// Stop the tracking interval
-				stopTracking();
-			});
-	}, 5000); // Update every 5 seconds
-}
-
-function getCurrentLocation() {
-	return new Promise(async function (resolve, reject) {
-		checkGeolocation(locationResult);
-
-		if (findRestaurantsBtn) {
-			findRestaurantsBtn.disabled = true;
-		}
-		if (cityStatsBtn) {
-			cityStatsBtn.disabled = true;
-		}
-		currentCoords = null;
-		currentAddress = null;
-
-		console.log("getCurrentLocation");
-		// Get current position
-		navigator.geolocation.getCurrentPosition(
-			async (position) => {
-				resolve(position);
-			},
-			(error) => {
-				reject(error);
-			},
-			{
-				enableHighAccuracy: true,
-				maximumAge: 0, // Don't use a cached position
-				timeout: 10000, // 10 seconds
-			},
-		);
-	});
+		getSingleLocationUpdate();
+	}, 20000); // Update every 20 seconds
 }
 
 function buildTextToSpeech(address) {
@@ -201,27 +341,67 @@ function buildTextToSpeech(address) {
  * Camada de GUI
  * --------------------
  */
-function displayPosition(position) {
-	const latitude = position.coords.latitude;
-	const longitude = position.coords.longitude;
-	const altitude = position.coords.altitude;
-	const precisao = position.coords.accuracy; // in meters
-	const precisaoAltitude = position.coords.altitudeAccuracy;
 
-	showCoords(
-		locationResult,
-		latitude,
-		longitude,
-		altitude,
-		precisao,
-		precisaoAltitude,
-	);
-	//renderAddress(position.address);
+class HTMLPositionDisplayer {
+	constructor(element) {
+		this.element = element;
+	}
+
+	showCoords(latitude, longitude, altitude, precisao, precisaoAltitude) {
+		html = renderHtmlCoords(
+			latitude,
+			longitude,
+			altitude,
+			precisao,
+			precisaoAltitude,
+		);
+		// Display coordinates first
+		const loc = `<div id="addressSection">
+        <p class="loading">Looking up address...</p>
+        </div>
+        <div class="section" id="restaurantsSection" style="display:none;">
+        <h3>Nearby Restaurants</h3>
+        <div id="restaurantsList"></div>
+        </div>
+        <div class="section" id="cityStatsSection" style="display:none;">
+        <h3>City Statistics</h3>
+        <div id="cityStats"></div>
+        </div> `;
+		html += loc;
+		// Display coordinates first
+		this.element.innerHTML = html;
+	}
+
+	displayPosition(position) {
+		const latitude = position.coords.latitude;
+		const longitude = position.coords.longitude;
+		const altitude = position.coords.altitude;
+		const precisao = position.coords.accuracy; // in meters
+		const precisaoAltitude = position.coords.altitudeAccuracy;
+
+		showCoords(latitude, longitude, altitude, precisao, precisaoAltitude);
+
+		// Enable buttons
+		if (findRestaurantsBtn) {
+			findRestaurantsBtn.disabled = false;
+		}
+	}
+	update(data, error, loading) {
+		if (loading) {
+			this.element.innerHTML = '<p class="loading">Loading...</p>';
+		} else if (error) {
+			this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+		} else if (data) {
+			this.displayPosition(data);
+		}
+	}
 }
 
 function displayError(error) {
 	// Error callback
 	let errorMessage;
+	console.log(error);
+	console.log(error.code);
 	switch (error.code) {
 		case error.PERMISSION_DENIED:
 			errorMessage = "User denied the request for Geolocation.";
