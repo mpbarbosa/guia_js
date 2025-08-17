@@ -106,36 +106,6 @@ class ReverseGeocodeAPIFetcher extends APIFetcher {
 	}
 }
 
-function renderHtmlCoords(
-	latitude,
-	longitude,
-	altitude,
-	precisao,
-	precisaoAltitude,
-) {
-	var html = "";
-	if (latitude) {
-		html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>`;
-	}
-	if (longitude) {
-		html += `<p><strong>Longitude:</strong> ${longitude.toFixed(6)}<br>`;
-	}
-	if (altitude) {
-		html += `<strong>Altitude</strong>: ${altitude.toFixed(2)} metros<br>`;
-	}
-	if (precisao) {
-		html += `<p><strong>Precisão:</strong> ±${Math.round(precisao)} metros</p>`;
-	}
-	if (precisaoAltitude) {
-		html += `<p><strong>Precisão da altitude:</strong> ±${Math.round(precisaoAltitude)} metros</p>`;
-	}
-
-	html += ` <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a> 
-  <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${latitude},${longitude}">Ver no Google Street View</a></p> `;
-
-	return html;
-}
-
 function getAddressType(address) {
 	const addressClass = address.class;
 	const addressType = address.type;
@@ -149,39 +119,6 @@ function getAddressType(address) {
 		addressTypeDescr = "Não classificado";
 	}
 	return addressTypeDescr;
-}
-
-function renderAddress(data) {
-	var addressTypeDescr;
-
-	addressTypeDescr = getAddressType(data);
-
-	var html = "";
-
-	if (data.address) {
-		html += `<p><strong>Tipo:</strong> ${addressTypeDescr}<br>`;
-		html += "<p><strong>Address Details:</strong></p><ul>";
-		for (const [key, value] of Object.entries(data.address)) {
-			html += `<li><strong>${key}:</strong> ${value}</li>`;
-		}
-		html += "</ul>";
-
-		html += ` <strong>Logradouro/Número:</strong> ${data.address.road}, ${data.address.house_number}<br>
-    <strong>Bairro:</strong> ${data.address.suburb}<br>
-    <strong>Município/Cidade:</strong> ${data.address.city}<br>
-    ${data.address.municipality}<br>
-    ${data.address.county}<br>
-    <strong>UF:</strong> ${data.address.state}<br>
-    <strong>Região:</strong> ${data.address.region}<br>
-    <strong>CEP:</strong> ${data.address.postcode}<br>
-    <strong>País:</strong> ${data.address.country}<br>
-    <strong>Código do país:</strong> ${data.address.country_code}<br>
-    <strong>Boundingbox</strong>: ${data.boundingbox} </p> `;
-
-		html += `${JSON.stringify(data)}`;
-	}
-
-	return html;
 }
 
 async function fetchReverseGeocoding(position) {
@@ -291,8 +228,8 @@ class GeolocationService {
 				return fetchReverseGeocoding(position);
 			})
 			.then((addressData) => {
-				var html = renderAddress(addressData);
-				locationResult.innerHTML = html;
+				this.currentAddress = addressData;
+				this.notifyObservers();
 			})
 			.catch((error) => {
 				displayError(error);
@@ -328,10 +265,12 @@ function startTracking() {
 }
 
 function buildTextToSpeech(address) {
-	var bairro = address.suburb;
+	var bairro = address.neibourhood;
 
-	if (!bairro) {
-		bairro = address.neibourhood;
+	if (bairro) {
+		bairro = bairro + ", " + address.suburb;
+	} else {
+		bairro = address.suburb;
 	}
 	const fBairro = bairro ? "Bairro " + bairro : "";
 	return fBairro;
@@ -347,8 +286,32 @@ class HTMLPositionDisplayer {
 		this.element = element;
 	}
 
+	renderHtmlCoords(latitude, longitude, altitude, precisao, precisaoAltitude) {
+		var html = "";
+		if (latitude) {
+			html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>`;
+		}
+		if (longitude) {
+			html += `<p><strong>Longitude:</strong> ${longitude.toFixed(6)}<br>`;
+		}
+		if (altitude) {
+			html += `<strong>Altitude</strong>: ${altitude.toFixed(2)} metros<br>`;
+		}
+		if (precisao) {
+			html += `<p><strong>Precisão:</strong> ±${Math.round(precisao)} metros</p>`;
+		}
+		if (precisaoAltitude) {
+			html += `<p><strong>Precisão da altitude:</strong> ±${Math.round(precisaoAltitude)} metros</p>`;
+		}
+
+		html += ` <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a> 
+  <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${latitude},${longitude}">Ver no Google Street View</a></p> `;
+
+		return html;
+	}
+
 	showCoords(latitude, longitude, altitude, precisao, precisaoAltitude) {
-		html = renderHtmlCoords(
+		html = this.renderHtmlCoords(
 			latitude,
 			longitude,
 			altitude,
@@ -386,13 +349,62 @@ class HTMLPositionDisplayer {
 			findRestaurantsBtn.disabled = false;
 		}
 	}
-	update(data, error, loading) {
+	update(currentCoords, currentAddress, loading, error) {
 		if (loading) {
 			this.element.innerHTML = '<p class="loading">Loading...</p>';
 		} else if (error) {
 			this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
-		} else if (data) {
-			this.displayPosition(data);
+		} else if (currentCoords) {
+			this.displayPosition(currentCoords);
+		}
+	}
+}
+
+class HTMLAddressDisplayer {
+	constructor(element) {
+		this.element = element;
+	}
+	renderAddress(data) {
+		var addressTypeDescr;
+
+		addressTypeDescr = getAddressType(data);
+
+		var html = "";
+
+		if (data.address) {
+			html += `<p><strong>Tipo:</strong> ${addressTypeDescr}<br>`;
+			html += "<p><strong>Address Details:</strong></p><ul>";
+			for (const [key, value] of Object.entries(data.address)) {
+				html += `<li><strong>${key}:</strong> ${value}</li>`;
+			}
+			html += "</ul>";
+
+			html += ` <strong>Logradouro/Número:</strong> ${data.address.road}, ${data.address.house_number}<br>
+    <strong>Bairro:</strong> ${data.address.suburb}<br>
+    <strong>Município/Cidade:</strong> ${data.address.city}<br>
+    ${data.address.municipality}<br>
+    ${data.address.county}<br>
+    <strong>UF:</strong> ${data.address.state}<br>
+    <strong>Região:</strong> ${data.address.region}<br>
+    <strong>CEP:</strong> ${data.address.postcode}<br>
+    <strong>País:</strong> ${data.address.country}<br>
+    <strong>Código do país:</strong> ${data.address.country_code}<br>
+    <strong>Boundingbox</strong>: ${data.boundingbox} </p> `;
+
+			html += `${JSON.stringify(data)}`;
+		}
+
+		return html;
+	}
+
+	displayAddress(data) {
+		var html = this.renderAddress(data);
+		this.element.innerHTML += html;
+	}
+
+	update(currentCoords, currentAddress, loading, error) {
+		if (currentAddress) {
+			this.displayAddress(currentAddress);
 		}
 	}
 }
