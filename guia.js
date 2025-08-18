@@ -179,6 +179,7 @@ class GeolocationService {
 	}
 
 	async getCurrentLocation() {
+		console.log("Getting current location...");
 		this.checkGeolocation();
 		return new Promise(async function (resolve, reject) {
 			// Get current position
@@ -209,6 +210,7 @@ class GeolocationService {
 	}
 
 	getSingleLocationUpdate() {
+		console.log("Getting single location update...");
 		locationResult.innerHTML =
 			'<p class="loading">Buscando a sua localização...</p>';
 
@@ -221,6 +223,7 @@ class GeolocationService {
 
 		this.getCurrentLocation()
 			.then((position) => {
+				console.log("Position obtained:", position);
 				this.notifyObservers();
 				return position;
 			})
@@ -228,6 +231,7 @@ class GeolocationService {
 				return fetchReverseGeocoding(position);
 			})
 			.then((addressData) => {
+				console.log("Address data obtained:", addressData);
 				this.currentAddress = addressData;
 				this.notifyObservers();
 			})
@@ -235,45 +239,28 @@ class GeolocationService {
 				displayError(error);
 			});
 	}
-}
 
-function startTracking() {
-	// Set up event listeners
-	speakBtn.addEventListener("click", speak);
-	pauseBtn.addEventListener("click", pauseSpeech);
-	resumeBtn.addEventListener("click", resumeSpeech);
-	stopBtn.addEventListener("click", stopSpeech);
-	languageSelect.addEventListener("change", loadVoices);
-	rateInput.addEventListener("input", updateRate);
-	pitchInput.addEventListener("input", updatePitch);
-
-	/*
+	startTracking() {
+		console.log("Starting tracking...");
+		/*
   Get current location. Do an initial check to see
   if the user has granted location permissions. Do an immediate
   update.
   */
 
-	getSingleLocationUpdate();
-	setTimeout(() => {
-		null;
-	}, 20000);
+		console.log("Checking geolocation permissions...");
+		this.getSingleLocationUpdate();
+		setTimeout(() => {
+			null;
+		}, 20000);
 
-	// Then set up periodic updates
-	trackingInterval = setInterval(() => {
-		getSingleLocationUpdate();
-	}, 20000); // Update every 20 seconds
-}
-
-function buildTextToSpeech(address) {
-	var bairro = address.neibourhood;
-
-	if (bairro) {
-		bairro = bairro + ", " + address.suburb;
-	} else {
-		bairro = address.suburb;
+		console.log("Setting up periodic updates...");
+		// Then set up periodic updates
+		var trackingInterval = setInterval(() => {
+			console.log("Periodic location update...");
+			this.getSingleLocationUpdate();
+		}, 20000); // Update every 20 seconds
 	}
-	const fBairro = bairro ? "Bairro " + bairro : "";
-	return fBairro;
 }
 
 /* --------------
@@ -431,4 +418,276 @@ function displayError(error) {
 	locationResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
 	findRestaurantsBtn.disabled = true;
 	cityStatsBtn.disabled = true;
+}
+
+/* ============================
+ * Voz do guia
+ * ============================
+ */
+
+class SpeechSynthesisManager {
+	constructor() {
+		console.log("Initializing speech manager...");
+		this.synth = window.speechSynthesis;
+		this.language = "pt-BR"; // Default language
+		this.voices = [];
+		this.fileteredVoices = [];
+		this.rate = 1;
+		this.pitch = 1;
+		this.voice = null;
+		this.synth.onvoiceschanged = () => {
+			// Voices are now loaded and accessible
+			this.voices = this.synth.getVoices();
+			// You can now use the 'voices' array to populate a dropdown, select a specific voice, etc.
+		};
+	}
+
+	loadVoices() {
+		if (this.voices.length == 0) {
+			this.voices = this.synth.getVoices();
+		}
+	}
+
+	setLanguage(selectedLanguage) {
+		this.language = selectedLanguage;
+		console.log("Setting language to:", this.language);
+		console.log("Loading voices...");
+		this.loadVoices();
+		this.filteredVoices = this.voices.filter((voice) =>
+			voice.lang.startsWith(this.language),
+		);
+		if (this.filteredVoices.length > 0) {
+			this.voice = this.filteredVoices[0]; // Default to first voice in filtered list
+		}
+		console.log("Filtered voices:", this.filteredVoices);
+	}
+
+	setSelectectedVoiceIndex(index) {
+		console.log("Setting selected voice index to:", index);
+	}
+
+	speak(text) {
+		if (this.synth.speaking) {
+			console.warn("Speech synthesis is already speaking.");
+			return;
+		}
+		const utterance = new SpeechSynthesisUtterance(text);
+		utterance.voice = this.voice;
+		utterance.rate = this.rate;
+		utterance.pitch = this.pitch;
+		this.synth.speak(utterance);
+	}
+
+	pause() {
+		if (this.synth.speaking) {
+			this.synth.pause();
+		}
+	}
+
+	resume() {
+		if (this.synth.paused) {
+			this.synth.resume();
+		}
+	}
+
+	stop() {
+		if (this.synth.speaking || this.synth.paused) {
+			this.synth.cancel();
+		}
+	}
+}
+
+class HtmlSpeechSynthesisDisplayer {
+	constructor(elements, document) {
+		console.log("Initializing HtmlSpeechSynthesisDisplayer...");
+		this.elements = elements;
+		this.document = document;
+		console.log("Initializing speech manager...");
+		this.speechManager = new SpeechSynthesisManager();
+		console.log("Speech manager initialized.");
+		this.init();
+	}
+	//
+	// Initialize the app
+	init() {
+		// Some browsers need this event to load voices
+		// DOM elements
+		console.log("Initializing DOM elements...");
+		this.textInput = this.document.getElementById(this.elements.textInputId);
+		this.speakBtn = this.document.getElementById(this.elements.speakBtnId);
+		this.pauseBtn = this.document.getElementById(this.elements.pauseBtnId);
+		this.resumeBtn = this.document.getElementById(this.elements.resumeBtnId);
+		this.stopBtn = this.document.getElementById(this.elements.stopBtnId);
+		this.voiceSelect = this.document.getElementById(
+			this.elements.voiceSelectId,
+		);
+		this.languageSelect = this.document.getElementById(
+			this.elements.languageSelectId,
+		);
+		this.rateInput = this.document.getElementById(this.elements.rateInputId);
+		this.pitchInput = this.document.getElementById(this.elements.pitchInputId);
+		this.rateValue = this.document.getElementById(this.elements.rateValueId);
+		this.pitchValue = this.document.getElementById(this.elements.pitchValueId);
+
+		// Set up event listeners
+		this.speakBtn.addEventListener("click", this.speak);
+		this.pauseBtn.addEventListener("click", this.pauseSpeech);
+		this.resumeBtn.addEventListener("click", this.resumeSpeech);
+		this.stopBtn.addEventListener("click", this.stopSpeech);
+		this.languageSelect.addEventListener("change", this.loadVoices);
+		this.voiceSelect.addEventListener("change", () => {
+			this.speechManager.selectedVoiceIndex(this.voiceSelect.value);
+		});
+		this.rateInput.addEventListener("input", this.updateRate);
+		this.pitchInput.addEventListener("input", this.updatePitch);
+
+		this.loadVoices();
+	}
+	// Load available voices
+	loadVoices() {
+		this.speechManager.setLanguage(this.languageSelect.value);
+
+		// Populate voice dropdown
+		this.voiceSelect.innerHTML = "";
+		var filteredVoices = this.speechManager.filteredVoices;
+		if (filteredVoices.length > 0) {
+			filteredVoices.forEach((voice, index) => {
+				const option = this.document.createElement("option");
+				option.value = index;
+				option.textContent = `${voice.name} (${voice.lang})`;
+				this.voiceSelect.appendChild(option);
+			});
+		} else {
+			const option = document.createElement("option");
+			option.textContent = "No voices available for selected language";
+			this.voiceSelect.appendChild(option);
+			console.warn(
+				"No voices available for language:",
+				this.speechManager.language,
+			);
+		}
+	}
+
+	updateRate() {
+		var rate = rateInput.value;
+		this.speechManager.rate = rate;
+		this.rateValue.textContent = value;
+	}
+
+	updatePitch(pitch) {
+		this.speechManager.pitch = pitch;
+		pitchValue.textContent = pitchInput.value;
+	}
+
+	speak() {
+		var text = "";
+
+		if (this.textInput && this.textInput.value) {
+			text = this.textInput.value.trim();
+		}
+
+		if (text === "") {
+			return;
+		}
+
+		// Stop any current speech
+		this.stop();
+		this.speechManager.speak(text);
+	}
+	// Speak function
+	speak2(textToBeSpoken, textAlert) {
+		// Set selected voice
+		const selectedVoiceIndex = voiceSelect.value;
+		console.log("selectedVoiceIndex:", selectedVoiceIndex);
+		console.log("voices: ", filteredVoices);
+		if (selectedVoiceIndex && filteredVoices[selectedVoiceIndex]) {
+			console.log("voice:", filteredVoices[selectedVoiceIndex]);
+			currentUtterance.voice = filteredVoices[selectedVoiceIndex];
+		}
+
+		// Set speech parameters
+		currentUtterance.rate = parseFloat(rateInput.value);
+		currentUtterance.pitch = parseFloat(pitchInput.value);
+		currentUtterance.volume = 1;
+
+		// Event listeners
+		currentUtterance.onstart = function () {
+			speakBtn.disabled = true;
+			pauseBtn.disabled = false;
+			stopBtn.disabled = false;
+		};
+
+		currentUtterance.onend = function () {
+			speakBtn.disabled = false;
+			pauseBtn.disabled = true;
+			resumeBtn.disabled = true;
+			stopBtn.disabled = true;
+			currentUtterance = null;
+		};
+
+		currentUtterance.onpause = function () {
+			pauseBtn.disabled = true;
+			resumeBtn.disabled = false;
+		};
+
+		currentUtterance.onresume = function () {
+			pauseBtn.disabled = false;
+			resumeBtn.disabled = true;
+		};
+
+		currentUtterance.onerror = function (event) {
+			console.error("Speech error:", event.error);
+			speakBtn.disabled = false;
+			pauseBtn.disabled = true;
+			resumeBtn.disabled = true;
+			stopBtn.disabled = true;
+			currentUtterance = null;
+		};
+
+		console.log("language:", currentUtterance.lang);
+		console.log("voice:", currentUtterance.voice);
+		console.log("rate:", currentUtterance.rate);
+		console.log("pitch:", currentUtterance.pitch);
+
+		window.speechSynthesis.cancel();
+		window.speechSynthesis.speak(currentUtterance);
+	}
+
+	pause() {
+		this.speechManager.pause();
+	}
+
+	resume() {
+		this.speechManager.resume();
+	}
+
+	stop() {
+		this.speechManager.stop();
+	}
+
+	buildTextToSpeech(currentAddress) {
+		var address = currentAddress.address;
+		var bairro = address.neibourhood;
+
+		if (bairro) {
+			bairro = bairro + ", " + address.suburb;
+		} else {
+			bairro = address.suburb;
+		}
+		const fBairro = bairro ? "Bairro " + bairro : "";
+		return fBairro;
+	}
+
+	update(currentCoords, currentAddress, error, loading) {
+		console.log("Updating speech synthesis display...");
+		console.log("currentAddress:", currentAddress);
+		if (currentAddress) {
+			this.loadVoices();
+			var textToBeSpoken = "";
+			textToBeSpoken += this.buildTextToSpeech(currentAddress);
+			console.log("textToBeSpoken:", textToBeSpoken);
+			this.textInput.value = textToBeSpoken;
+			this.speak(textToBeSpoken);
+		}
+	}
 }
