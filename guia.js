@@ -435,16 +435,43 @@ class SpeechSynthesisManager {
 		this.rate = 1;
 		this.pitch = 1;
 		this.voice = null;
-		this.synth.onvoiceschanged = () => {
-			// Voices are now loaded and accessible
-			this.voices = this.synth.getVoices();
-			// You can now use the 'voices' array to populate a dropdown, select a specific voice, etc.
-		};
+		this.loadVoices();
 	}
 
-	loadVoices() {
-		if (this.voices.length == 0) {
-			this.voices = this.synth.getVoices();
+	getSpeechSynthesisVoices() {
+		return new Promise((resolve) => {
+			// Check if voices are already loaded
+			var voices = window.speechSynthesis.getVoices();
+			if (this.voices.length > 0) {
+				resolve(voices);
+				return;
+			}
+
+			// If not loaded, wait for the 'voiceschanged' event
+			window.speechSynthesis.onvoiceschanged = () => {
+				voices = window.speechSynthesis.getVoices();
+				resolve(voices);
+			};
+		});
+	}
+
+	async loadVoices() {
+		try {
+			const availableVoices = await getSpeechVoices();
+			console.log("Available voices:", availableVoices);
+
+			// You can now use these voices for speech synthesis
+			if (availableVoices.length > 0) {
+				const utterance = new SpeechSynthesisUtterance("Hello, world!");
+				utterance.voice = availableVoices[0]; // Use the first available voice
+				window.speechSynthesis.speak(utterance);
+			} else {
+				console.log("No speech synthesis voices found.");
+			}
+		} catch (error) {
+			console.error("Error getting voices:", error);
+		} finally {
+			this.voices = availableVoices;
 		}
 	}
 
