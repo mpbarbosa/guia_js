@@ -438,18 +438,18 @@ class SpeechSynthesisManager {
 		this.loadVoices();
 	}
 
-	getSpeechSynthesisVoices() {
+	async getSpeechVoices() {
 		return new Promise((resolve) => {
 			// Check if voices are already loaded
-			var voices = window.speechSynthesis.getVoices();
-			if (this.voices.length > 0) {
+			var voices = this.synth.getVoices();
+			if (voices.length > 0) {
 				resolve(voices);
 				return;
 			}
 
-			// If not loaded, wait for the 'voiceschanged' event
+			// if not, wait for voices to be loaded
 			window.speechSynthesis.onvoiceschanged = () => {
-				voices = window.speechSynthesis.getVoices();
+				voices = this.synth.getVoices();
 				resolve(voices);
 			};
 		});
@@ -457,21 +457,27 @@ class SpeechSynthesisManager {
 
 	async loadVoices() {
 		try {
-			const availableVoices = await getSpeechVoices();
-			console.log("Available voices:", availableVoices);
+			const availableVoices = await this.getSpeechVoices();
+			console.log("Voices loaded:", availableVoices);
 
-			// You can now use these voices for speech synthesis
+			// You can now use the 'voices' array to populate a dropdown, select a specific voice, etc.
 			if (availableVoices.length > 0) {
-				const utterance = new SpeechSynthesisUtterance("Hello, world!");
-				utterance.voice = availableVoices[0]; // Use the first available voice
-				window.speechSynthesis.speak(utterance);
+				this.voices = availableVoices;
+				this.filteredVoices = this.voices.filter((voice) =>
+					voice.lang.startsWith(this.language),
+				);
+				console.log("Filtered voices:", this.filteredVoices);
+				if (this.filteredVoices.length > 0) {
+					this.voice = this.filteredVoices[0]; // Default to first voice in filtered list
+				}
 			} else {
-				console.log("No speech synthesis voices found.");
+				console.warn(
+					"No voices available for selected language:",
+					this.language,
+				);
 			}
 		} catch (error) {
-			console.error("Error getting voices:", error);
-		} finally {
-			this.voices = availableVoices;
+			console.error("Error loading voices:", error);
 		}
 	}
 
