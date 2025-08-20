@@ -401,7 +401,7 @@ class AddressDataExtractor {
 
 		this.enderecoPadronizado.bairro = address.neighbourhood || address.suburb;
 
-		if (address.neibourhood && address.suburb) {
+		if (address.neighbourhood && address.suburb) {
 			this.enderecoPadronizado.regiaoCidade = address.suburb;
 		}
 
@@ -771,16 +771,8 @@ class HtmlSpeechSynthesisDisplayer {
 	}
 
 	buildTextToSpeech(currentAddress) {
-		var address = currentAddress.address;
-		var bairro = address.neibourhood;
-
-		if (bairro) {
-			bairro = bairro + ", " + address.suburb;
-		} else {
-			bairro = address.suburb;
-		}
-		const fBairro = bairro ? "Bairro " + bairro : "";
-		return fBairro;
+		var addressExtractor = new AddressDataExtractor(currentAddress);
+		return addressExtractor.enderecoPadronizado.bairroCompleto();
 	}
 
 	update(currentCoords, currentAddress, error, loading) {
