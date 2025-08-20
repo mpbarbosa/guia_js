@@ -57,6 +57,7 @@ class APIFetcher {
 	}
 
 	notifyObservers() {
+		console.log("Notifying observers...");
 		this.observers.forEach((observer) => {
 			observer.update(this.data, this.error, this.loading);
 		});
@@ -66,14 +67,14 @@ class APIFetcher {
 		const cacheKey = this.getCacheKey();
 		if (this.cache.has(cacheKey)) {
 			this.data = this.cache.get(cacheKey);
-			this.notifyObservers();
 			return;
 		}
 		this.loading = true;
-		this.notifyObservers();
 
 		try {
+			console.log("Fetching data from URL:", this.url);
 			const response = await fetch(this.url);
+			console.log("Response status:", response.status);
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
@@ -84,13 +85,18 @@ class APIFetcher {
 			this.error = error;
 		} finally {
 			this.loading = false;
-			this.notifyObservers();
 		}
 	}
 }
 
-class ReverseGeocodeAPIFetcher extends APIFetcher {
+class ReverseGeocoder extends APIFetcher {
 	constructor(latitude, longitude) {
+		console.log(
+			"Initializing ReverseGeocoder with latitude:",
+			latitude,
+			"and longitude:",
+			longitude,
+		);
 		const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
 		super(url);
 		this.latitude = latitude;
@@ -98,11 +104,28 @@ class ReverseGeocodeAPIFetcher extends APIFetcher {
 	}
 
 	getCacheKey() {
+		this.notifyObservers();
 		return `${this.latitude},${this.longitude}`;
 	}
 
 	async fetchAddress() {
 		return super.fetchData();
+	}
+
+	reverseGeocode() {
+		return new Promise((resolve, reject) => {
+			this.fetchData()
+				.then(() => {
+					if (this.error) {
+						reject(this.error);
+					} else {
+						resolve(this.data);
+					}
+				})
+				.catch((error) => {
+					reject(error);
+				});
+		});
 	}
 }
 
@@ -119,16 +142,6 @@ function getAddressType(address) {
 		addressTypeDescr = "Não classificado";
 	}
 	return addressTypeDescr;
-}
-
-async function fetchReverseGeocoding(position) {
-	const latitude = position.coords.latitude;
-	const longitude = position.coords.longitude;
-
-	const fetcher = new ReverseGeocodeAPIFetcher(latitude, longitude);
-	await fetcher.fetchAddress();
-	const address = fetcher.data;
-	return address;
 }
 
 class GeolocationService {
@@ -228,7 +241,11 @@ class GeolocationService {
 				return position;
 			})
 			.then((position) => {
-				return fetchReverseGeocoding(position);
+				var reverseGeocoder = new ReverseGeocoder(
+					position.coords.latitude,
+					position.coords.longitude,
+				);
+				return reverseGeocoder.reverseGeocode();
 			})
 			.then((addressData) => {
 				console.log("Address data obtained:", addressData);
@@ -347,10 +364,57 @@ class HTMLPositionDisplayer {
 	}
 }
 
+class EnderecoPadronizado {
+	constructor() {
+		this.municipio = null;
+		this.logradouro = null;
+		this.house_number = null;
+		this.bairro = null;
+		this.regiaoCidade = null;
+	}
+
+	logradouroCompleto() {
+		return this.house_number
+			? `${this.logradouro}, ${this.house_number}`
+			: `${this.logradouro}, s/n`;
+	}
+
+	bairroCompleto() {
+		return this.regiaoCidade
+			? `${this.bairro}, ${this.regiaoCidade}`
+			: this.bairro;
+	}
+}
+
+class AddressDataExtractor {
+	constructor(data) {
+		this.data = data;
+		this.enderecoPadronizado = new EnderecoPadronizado();
+		this.padronizaEndereco();
+	}
+
+	padronizaEndereco() {
+		var address = this.data.address;
+		this.enderecoPadronizado.logradouro = address.street || address.road;
+
+		this.enderecoPadronizado.house_number = address.house_number || "";
+
+		this.enderecoPadronizado.bairro = address.neighbourhood || address.suburb;
+
+		if (address.neighbourhood && address.suburb) {
+			this.enderecoPadronizado.regiaoCidade = address.suburb;
+		}
+
+		this.enderecoPadronizado.municipio =
+			address.city || address.town || address.municipality || address.county;
+	}
+}
+
 class HTMLAddressDisplayer {
 	constructor(element) {
 		this.element = element;
 	}
+
 	renderAddress(data) {
 		var addressTypeDescr;
 
@@ -359,6 +423,8 @@ class HTMLAddressDisplayer {
 		var html = "";
 
 		if (data.address) {
+			var extractor = new AddressDataExtractor(data);
+			var enderecoPadronizado = extractor.enderecoPadronizado;
 			html += `<p><strong>Tipo:</strong> ${addressTypeDescr}<br>`;
 			html += "<p><strong>Address Details:</strong></p><ul>";
 			for (const [key, value] of Object.entries(data.address)) {
@@ -366,9 +432,9 @@ class HTMLAddressDisplayer {
 			}
 			html += "</ul>";
 
-			html += ` <strong>Logradouro/Número:</strong> ${data.address.road}, ${data.address.house_number}<br>
-    <strong>Bairro:</strong> ${data.address.suburb}<br>
-    <strong>Município/Cidade:</strong> ${data.address.city}<br>
+			html += ` <strong>Logradouro/Número:</strong> ${enderecoPadronizado.logradouroCompleto()}<br>
+    <strong>Bairro:</strong> ${enderecoPadronizado.bairroCompleto()}<br>
+    <strong>Município/Cidade:</strong> ${enderecoPadronizado.municipio}<br>
     ${data.address.municipality}<br>
     ${data.address.county}<br>
     <strong>UF:</strong> ${data.address.state}<br>
@@ -389,8 +455,14 @@ class HTMLAddressDisplayer {
 		this.element.innerHTML += html;
 	}
 
-	update(currentCoords, currentAddress, loading, error) {
+	update(currentAddress, loading, error) {
+		console.log("Updating address display...");
+		console.log("currentAddress:", currentAddress);
 		if (currentAddress) {
+			console.log(
+				"Updating address display with currentAddress:",
+				currentAddress,
+			);
 			this.displayAddress(currentAddress);
 		}
 	}
@@ -699,16 +771,8 @@ class HtmlSpeechSynthesisDisplayer {
 	}
 
 	buildTextToSpeech(currentAddress) {
-		var address = currentAddress.address;
-		var bairro = address.neibourhood;
-
-		if (bairro) {
-			bairro = bairro + ", " + address.suburb;
-		} else {
-			bairro = address.suburb;
-		}
-		const fBairro = bairro ? "Bairro " + bairro : "";
-		return fBairro;
+		var addressExtractor = new AddressDataExtractor(currentAddress);
+		return addressExtractor.enderecoPadronizado.bairroCompleto();
 	}
 
 	update(currentCoords, currentAddress, error, loading) {
