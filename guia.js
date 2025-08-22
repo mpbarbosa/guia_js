@@ -97,14 +97,12 @@ class ReverseGeocoder extends APIFetcher {
 			"and longitude:",
 			longitude,
 		);
-		const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
-		super(url);
+		super("");
 		this.latitude = latitude;
 		this.longitude = longitude;
 	}
 
 	getCacheKey() {
-		this.notifyObservers();
 		return `${this.latitude},${this.longitude}`;
 	}
 
@@ -113,6 +111,7 @@ class ReverseGeocoder extends APIFetcher {
 	}
 
 	reverseGeocode() {
+		this.url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${this.latitude}&lon=${this.longitude}&zoom=18&addressdetails=1`;
 		return new Promise((resolve, reject) => {
 			this.fetchData()
 				.then(() => {
@@ -147,6 +146,7 @@ function getAddressType(address) {
 class GeolocationService {
 	constructor(element) {
 		this.element = element;
+		this.currentPosition = null;
 		this.currentCoords = null;
 		this.currentAddress = null;
 		this.trackingInterval = null;
@@ -164,8 +164,10 @@ class GeolocationService {
 	}
 
 	notifyObservers() {
+		console.log("Notifying observers of location update...");
 		this.observers.forEach((observer) => {
-			observer.update(this.currentCoords, this.currentAddress);
+			console.log("Notifying observer:", observer);
+			observer.update(this.currentPosition);
 		});
 	}
 
@@ -206,8 +208,7 @@ class GeolocationService {
 					if (cityStatsBtn) {
 						cityStatsBtn.disabled = true;
 					}
-					currentCoords = null;
-					currentAddress = null;
+					console.log("Position obtained:", position);
 					resolve(position);
 				},
 				(error) => {
@@ -234,23 +235,42 @@ class GeolocationService {
 			cityStatsBtn.disabled = true;
 		}
 
-		this.getCurrentLocation()
+		return this.getCurrentLocation().then((position) => {
+			console.log("Position obtained:", position);
+			this.currentPosition = position;
+			this.currentCoords = position.coords;
+			this.notifyObservers();
+			return position;
+		});
+	}
+}
+
+class WebGeocodingManager {
+	constructor(resultElement) {
+		console.log("Initializing WebGeocodingManager...");
+		this.locationResult = resultElement;
+	}
+
+	getSingleLocationUpdate() {
+		var geolocationService = new GeolocationService(locationResult);
+		var reverseGeocoder = new ReverseGeocoder();
+		var positionDisplayer = new HTMLPositionDisplayer(locationResult);
+		var addressDisplayer = new HTMLAddressDisplayer(locationResult);
+
+		geolocationService.subscribe(positionDisplayer);
+		reverseGeocoder.subscribe(addressDisplayer);
+
+		geolocationService
+			.getSingleLocationUpdate()
 			.then((position) => {
-				console.log("Position obtained:", position);
-				this.notifyObservers();
-				return position;
-			})
-			.then((position) => {
-				var reverseGeocoder = new ReverseGeocoder(
-					position.coords.latitude,
-					position.coords.longitude,
-				);
+				reverseGeocoder.latitude = position.coords.latitude;
+				reverseGeocoder.longitude = position.coords.longitude;
 				return reverseGeocoder.reverseGeocode();
 			})
 			.then((addressData) => {
 				console.log("Address data obtained:", addressData);
-				this.currentAddress = addressData;
-				this.notifyObservers();
+				reverseGeocoder.currentAddress = addressData;
+				reverseGeocoder.notifyObservers();
 			})
 			.catch((error) => {
 				displayError(error);
@@ -258,15 +278,51 @@ class GeolocationService {
 	}
 
 	startTracking() {
+		var geolocationService = new GeolocationService(locationResult);
+		var reverseGeocoder = new ReverseGeocoder();
+		var positionDisplayer = new HTMLPositionDisplayer(locationResult);
+		var addressDisplayer = new HTMLAddressDisplayer(locationResult);
+		var htmlSpeechSynthesisDisplayer = new HtmlSpeechSynthesisDisplayer({
+			languageSelectId: "language",
+			voiceSelectId: "voice-select",
+			textInputId: "text-input",
+			speakBtnId: "speak-btn",
+			pauseBtnId: "pause-btn",
+			resumeBtnId: "resume-btn",
+			stopBtnId: "stop-btn",
+			rateInputId: "rate",
+			rateValueId: "rate-value",
+			pitchInputId: "pitch",
+			pitchValueId: "pitch-value",
+		});
+
+		geolocationService.subscribe(positionDisplayer);
+		reverseGeocoder.subscribe(addressDisplayer);
+		reverseGeocoder.subscribe(htmlSpeechSynthesisDisplayer);
+
 		console.log("Starting tracking...");
 		/*
-  Get current location. Do an initial check to see
-  if the user has granted location permissions. Do an immediate
-  update.
-  */
+    Get current location. Do an initial check to see
+    if the user has granted location permissions. Do an immediate
+    update.
+    */
 
 		console.log("Checking geolocation permissions...");
-		this.getSingleLocationUpdate();
+		geolocationService
+			.getSingleLocationUpdate()
+			.then((position) => {
+				reverseGeocoder.latitude = position.coords.latitude;
+				reverseGeocoder.longitude = position.coords.longitude;
+				return reverseGeocoder.reverseGeocode();
+			})
+			.then((addressData) => {
+				console.log("Address data obtained:", addressData);
+				reverseGeocoder.currentAddress = addressData;
+				reverseGeocoder.notifyObservers();
+			})
+			.catch((error) => {
+				displayError(error);
+			});
 		setTimeout(() => {
 			null;
 		}, 20000);
@@ -275,7 +331,21 @@ class GeolocationService {
 		// Then set up periodic updates
 		var trackingInterval = setInterval(() => {
 			console.log("Periodic location update...");
-			this.getSingleLocationUpdate();
+			geolocationService
+				.getSingleLocationUpdate()
+				.then((position) => {
+					reverseGeocoder.latitude = position.coords.latitude;
+					reverseGeocoder.longitude = position.coords.longitude;
+					return reverseGeocoder.reverseGeocode();
+				})
+				.then((addressData) => {
+					console.log("Address data obtained:", addressData);
+					reverseGeocoder.currentAddress = addressData;
+					reverseGeocoder.notifyObservers();
+				})
+				.catch((error) => {
+					displayError(error);
+				});
 		}, 20000); // Update every 20 seconds
 	}
 }
@@ -287,10 +357,19 @@ class GeolocationService {
 
 class HTMLPositionDisplayer {
 	constructor(element) {
+		console.log("Initializing HTMLPositionDisplayer...");
 		this.element = element;
 	}
 
-	renderHtmlCoords(latitude, longitude, altitude, precisao, precisaoAltitude) {
+	renderHtmlCoords(position) {
+		console.log("Rendering HTML coordinates...");
+		const latitude = position.coords.latitude;
+		const longitude = position.coords.longitude;
+		const altitude = position.coords.altitude;
+		const precisao = position.coords.accuracy; // in meters
+		const precisaoAltitude = position.coords.altitudeAccuracy;
+		const direcao = position.coords.heading; // in degrees
+		const velocidade = position.coords.speed; // in meters per second
 		var html = "";
 		if (latitude) {
 			html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>`;
@@ -307,6 +386,12 @@ class HTMLPositionDisplayer {
 		if (precisaoAltitude) {
 			html += `<p><strong>Precisão da altitude:</strong> ±${Math.round(precisaoAltitude)} metros</p>`;
 		}
+		if (direcao) {
+			html += `<p><strong>Direção:</strong> ${direcao.toFixed(2)}°</p>`;
+		}
+		if (velocidade) {
+			html += `<p><strong>Velocidade:</strong> ${velocidade.toFixed(2)} m/s</p>`;
+		}
 
 		html += ` <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a> 
   <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${latitude},${longitude}">Ver no Google Street View</a></p> `;
@@ -314,14 +399,8 @@ class HTMLPositionDisplayer {
 		return html;
 	}
 
-	showCoords(latitude, longitude, altitude, precisao, precisaoAltitude) {
-		html = this.renderHtmlCoords(
-			latitude,
-			longitude,
-			altitude,
-			precisao,
-			precisaoAltitude,
-		);
+	showCoords(position) {
+		var html = this.renderHtmlCoords(position);
 		// Display coordinates first
 		const loc = `<div id="addressSection">
         <p class="loading">Looking up address...</p>
@@ -340,20 +419,16 @@ class HTMLPositionDisplayer {
 	}
 
 	displayPosition(position) {
-		const latitude = position.coords.latitude;
-		const longitude = position.coords.longitude;
-		const altitude = position.coords.altitude;
-		const precisao = position.coords.accuracy; // in meters
-		const precisaoAltitude = position.coords.altitudeAccuracy;
-
-		showCoords(latitude, longitude, altitude, precisao, precisaoAltitude);
+		this.showCoords(position);
 
 		// Enable buttons
 		if (findRestaurantsBtn) {
 			findRestaurantsBtn.disabled = false;
 		}
 	}
-	update(currentCoords, currentAddress, loading, error) {
+	update(currentCoords, loading, error) {
+		console.log("Updating position display...");
+		console.log("currentCoords:", currentCoords);
 		if (loading) {
 			this.element.innerHTML = '<p class="loading">Loading...</p>';
 		} else if (error) {
@@ -603,10 +678,9 @@ class SpeechSynthesisManager {
 }
 
 class HtmlSpeechSynthesisDisplayer {
-	constructor(elements, document) {
+	constructor(elements) {
 		console.log("Initializing HtmlSpeechSynthesisDisplayer...");
 		this.elements = elements;
-		this.document = document;
 		console.log("Initializing speech manager...");
 		this.speechManager = new SpeechSynthesisManager();
 		console.log("Speech manager initialized.");
@@ -618,21 +692,19 @@ class HtmlSpeechSynthesisDisplayer {
 		// Some browsers need this event to load voices
 		// DOM elements
 		console.log("Initializing DOM elements...");
-		this.textInput = this.document.getElementById(this.elements.textInputId);
-		this.speakBtn = this.document.getElementById(this.elements.speakBtnId);
-		this.pauseBtn = this.document.getElementById(this.elements.pauseBtnId);
-		this.resumeBtn = this.document.getElementById(this.elements.resumeBtnId);
-		this.stopBtn = this.document.getElementById(this.elements.stopBtnId);
-		this.voiceSelect = this.document.getElementById(
-			this.elements.voiceSelectId,
-		);
-		this.languageSelect = this.document.getElementById(
+		this.textInput = document.getElementById(this.elements.textInputId);
+		this.speakBtn = document.getElementById(this.elements.speakBtnId);
+		this.pauseBtn = document.getElementById(this.elements.pauseBtnId);
+		this.resumeBtn = document.getElementById(this.elements.resumeBtnId);
+		this.stopBtn = document.getElementById(this.elements.stopBtnId);
+		this.voiceSelect = document.getElementById(this.elements.voiceSelectId);
+		this.languageSelect = document.getElementById(
 			this.elements.languageSelectId,
 		);
-		this.rateInput = this.document.getElementById(this.elements.rateInputId);
-		this.pitchInput = this.document.getElementById(this.elements.pitchInputId);
-		this.rateValue = this.document.getElementById(this.elements.rateValueId);
-		this.pitchValue = this.document.getElementById(this.elements.pitchValueId);
+		this.rateInput = document.getElementById(this.elements.rateInputId);
+		this.pitchInput = document.getElementById(this.elements.pitchInputId);
+		this.rateValue = document.getElementById(this.elements.rateValueId);
+		this.pitchValue = document.getElementById(this.elements.pitchValueId);
 
 		// Set up event listeners
 		this.speakBtn.addEventListener("click", this.speak);
@@ -657,7 +729,7 @@ class HtmlSpeechSynthesisDisplayer {
 		var filteredVoices = this.speechManager.filteredVoices;
 		if (filteredVoices.length > 0) {
 			filteredVoices.forEach((voice, index) => {
-				const option = this.document.createElement("option");
+				const option = document.createElement("option");
 				option.value = index;
 				option.textContent = `${voice.name} (${voice.lang})`;
 				this.voiceSelect.appendChild(option);
@@ -775,8 +847,10 @@ class HtmlSpeechSynthesisDisplayer {
 		return addressExtractor.enderecoPadronizado.bairroCompleto();
 	}
 
-	update(currentCoords, currentAddress, error, loading) {
-		console.log("Updating speech synthesis display...");
+	update(currentAddress, error, loading) {
+		console.log(
+			"(HtmlSpeechSynthesisDisplayer) Updating speech synthesis display...",
+		);
 		console.log("currentAddress:", currentAddress);
 		if (currentAddress) {
 			this.loadVoices();
