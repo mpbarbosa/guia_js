@@ -61,7 +61,6 @@ class APIFetcher {
 		this.timeout = 10000;
 		this.cache = new Map();
 		this.lastPosition = null;
-		Object.freeze(this); // Prevent further modification
 	}
 
 	getCacheKey() {
@@ -132,7 +131,16 @@ class ReverseGeocoder extends APIFetcher {
 		super("");
 		this.latitude = latitude;
 		this.longitude = longitude;
+		Object.defineProperty(this, "currentAddress", {
+			get: () => this.data,
+			set: (value) => {
+				this.data = value;
+				this.notifyObservers();
+			},
+		});
 		Object.freeze(this); // Prevent further modification
+		console.log("ReverseGeocoder initialized.");
+		this.notifyObservers();
 	}
 
 	setCoordinates(latitude, longitude) {
