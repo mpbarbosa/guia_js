@@ -22,7 +22,6 @@ class SingletonStatusManager {
 
 		this.gettingLocation = false;
 		SingletonStatusManager.instance = this;
-		Object.freeze(this); // Prevent further modification
 	}
 
 	isGettingLocation() {
