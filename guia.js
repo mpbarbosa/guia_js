@@ -22,6 +22,21 @@ class SingletonStatusManager {
 
 		this.gettingLocation = false;
 		SingletonStatusManager.instance = this;
+		Object.freeze(this); // Prevent further modification
+	}
+
+	isGettingLocation() {
+		return this.gettingLocation;
+	}
+
+	setGettingLocation(status) {
+		console.log("Setting gettingLocation status to:", status);
+		this.gettingLocation = status;
+		if (status) {
+			console.log("Getting location...");
+		} else {
+			console.log("Stopped getting location.");
+		}
 	}
 
 	setGettingLocation(status) {
@@ -46,6 +61,23 @@ class APIFetcher {
 		this.timeout = 10000;
 		this.cache = new Map();
 		this.lastPosition = null;
+		Object.freeze(this); // Prevent further modification
+	}
+
+	getCacheKey() {
+		// Override this method in subclasses to provide a unique cache key
+		return this.url;
+	}
+
+	setUrl(url) {
+		this.url = url;
+		this.data = null;
+		this.error = null;
+		this.loading = false;
+		this.lastFetch = 0;
+		this.cache.clear();
+		console.log("URL set to:", this.url);
+		this.notifyObservers();
 	}
 
 	subscribe(observer) {
@@ -100,6 +132,20 @@ class ReverseGeocoder extends APIFetcher {
 		super("");
 		this.latitude = latitude;
 		this.longitude = longitude;
+		Object.freeze(this); // Prevent further modification
+	}
+
+	setCoordinates(latitude, longitude) {
+		this.latitude = latitude;
+		this.longitude = longitude;
+		this.url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${this.latitude}&lon=${this.longitude}&zoom=18&addressdetails=1`;
+		this.data = null;
+		this.error = null;
+		this.loading = false;
+		this.lastFetch = 0;
+		this.cache.clear();
+		console.log("Coordinates set to:", this.latitude, this.longitude);
+		this.notifyObservers();
 	}
 
 	getCacheKey() {
@@ -153,6 +199,7 @@ class GeolocationService {
 		this.locationResult = null;
 		this.observers = [];
 		this.gettingLocation = false;
+		Object.freeze(this); // Prevent further modification
 	}
 
 	subscribe(observer) {
@@ -249,6 +296,7 @@ class WebGeocodingManager {
 	constructor(resultElement) {
 		console.log("Initializing WebGeocodingManager...");
 		this.locationResult = resultElement;
+		Object.freeze(this); // Prevent further modification
 	}
 
 	getSingleLocationUpdate() {
@@ -359,6 +407,7 @@ class HTMLPositionDisplayer {
 	constructor(element) {
 		console.log("Initializing HTMLPositionDisplayer...");
 		this.element = element;
+		Object.freeze(this); // Prevent further modification
 	}
 
 	renderHtmlCoords(position) {
@@ -446,6 +495,7 @@ class EnderecoPadronizado {
 		this.house_number = null;
 		this.bairro = null;
 		this.regiaoCidade = null;
+		Object.freeze(this); // Prevent further modification
 	}
 
 	logradouroCompleto() {
@@ -466,6 +516,7 @@ class AddressDataExtractor {
 		this.data = data;
 		this.enderecoPadronizado = new EnderecoPadronizado();
 		this.padronizaEndereco();
+		Object.freeze(this); // Prevent further modification
 	}
 
 	padronizaEndereco() {
@@ -488,6 +539,7 @@ class AddressDataExtractor {
 class HTMLAddressDisplayer {
 	constructor(element) {
 		this.element = element;
+		Object.freeze(this); // Prevent further modification
 	}
 
 	renderAddress(data) {
@@ -583,6 +635,7 @@ class SpeechSynthesisManager {
 		this.pitch = 1;
 		this.voice = null;
 		this.loadVoices();
+		Object.freeze(this); // Prevent further modification
 	}
 
 	async getSpeechVoices() {
@@ -685,6 +738,7 @@ class HtmlSpeechSynthesisDisplayer {
 		this.speechManager = new SpeechSynthesisManager();
 		console.log("Speech manager initialized.");
 		this.init();
+		Object.freeze(this); // Prevent further modification
 	}
 	//
 	// Initialize the app
