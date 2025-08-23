@@ -137,7 +137,6 @@ class ReverseGeocoder extends APIFetcher {
 				this.notifyObservers();
 			},
 		});
-		Object.freeze(this); // Prevent further modification
 		console.log("ReverseGeocoder initialized.");
 		this.notifyObservers();
 	}
@@ -206,7 +205,6 @@ class GeolocationService {
 		this.locationResult = null;
 		this.observers = [];
 		this.gettingLocation = false;
-		Object.freeze(this); // Prevent further modification
 	}
 
 	subscribe(observer) {
@@ -303,7 +301,16 @@ class WebGeocodingManager {
 	constructor(resultElement) {
 		console.log("Initializing WebGeocodingManager...");
 		this.locationResult = resultElement;
+		this.observers = [];
 		Object.freeze(this); // Prevent further modification
+		console.log("WebGeocodingManager initialized.");
+		this.notifyObservers();
+	}
+
+	notifyObservers() {
+		for (const observer of this.observers) {
+			observer.update(this.currentPosition);
+		}
 	}
 
 	getSingleLocationUpdate() {
@@ -502,7 +509,6 @@ class EnderecoPadronizado {
 		this.house_number = null;
 		this.bairro = null;
 		this.regiaoCidade = null;
-		Object.freeze(this); // Prevent further modification
 	}
 
 	logradouroCompleto() {
@@ -540,6 +546,8 @@ class AddressDataExtractor {
 
 		this.enderecoPadronizado.municipio =
 			address.city || address.town || address.municipality || address.county;
+
+		Object.freeze(this.enderecoPadronizado); // Prevent further modification
 	}
 }
 
@@ -642,7 +650,6 @@ class SpeechSynthesisManager {
 		this.pitch = 1;
 		this.voice = null;
 		this.loadVoices();
-		Object.freeze(this); // Prevent further modification
 	}
 
 	async getSpeechVoices() {
