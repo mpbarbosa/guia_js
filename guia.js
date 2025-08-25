@@ -74,12 +74,16 @@ class APIFetcher {
 		this.loading = false;
 		this.lastFetch = 0;
 		this.cache.clear();
-		console.log("URL set to:", this.url);
+		console.log("(APIFetcher) URL set to:", this.url);
+		console.log("(APIFetcher) Notifying observers after URL change.");
 		this.notifyObservers();
 	}
 
 	subscribe(observer) {
-		this.observers.push(observer);
+		console.log(`(APIFetcher) observer ${observer} subscribing ${this}`);
+		if (observer) {
+			this.observers.push(observer);
+		}
 	}
 
 	unsubscribe(observer) {
@@ -87,8 +91,9 @@ class APIFetcher {
 	}
 
 	notifyObservers() {
-		console.log("Notifying observers...");
+		console.log("(APIFetcher) Notifying observers: " + this.observers);
 		this.observers.forEach((observer) => {
+			console.log("(APIFetcher) Notifying observer:", observer);
 			observer.update(this.data, this.error, this.loading);
 		});
 	}
@@ -122,7 +127,7 @@ class APIFetcher {
 class ReverseGeocoder extends APIFetcher {
 	constructor(latitude, longitude) {
 		console.log(
-			"Initializing ReverseGeocoder with latitude:",
+			"(ReverseGeocoder) Initializing ReverseGeocoder with latitude:",
 			latitude,
 			"and longitude:",
 			longitude,
@@ -134,10 +139,10 @@ class ReverseGeocoder extends APIFetcher {
 			get: () => this.data,
 			set: (value) => {
 				this.data = value;
-				this.notifyObservers();
+				console.log("(ReverseGeocoder) currentAddress set to:", value);
 			},
 		});
-		console.log("ReverseGeocoder initialized.");
+		console.log("(ReverseGeocoder) ReverseGeocoder initialized.");
 		this.notifyObservers();
 	}
 
@@ -150,7 +155,11 @@ class ReverseGeocoder extends APIFetcher {
 		this.loading = false;
 		this.lastFetch = 0;
 		this.cache.clear();
-		console.log("Coordinates set to:", this.latitude, this.longitude);
+		console.log(
+			"(ReverseGeocoder) Coordinates set to:",
+			this.latitude,
+			this.longitude,
+		);
 		this.notifyObservers();
 	}
 
@@ -163,6 +172,7 @@ class ReverseGeocoder extends APIFetcher {
 	}
 
 	reverseGeocode() {
+		console.log("(ReverseGeocoder) Performing reverse geocoding...");
 		this.url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${this.latitude}&lon=${this.longitude}&zoom=18&addressdetails=1`;
 		return new Promise((resolve, reject) => {
 			this.fetchData()
@@ -208,6 +218,15 @@ class GeolocationService {
 	}
 
 	subscribe(observer) {
+		if (observer == null) {
+			console.warn(
+				"(GeolocationService) Attempted to subscribe a null observer.",
+			);
+			return;
+		}
+		console.log(
+			`(GeolocationService) observer ${observer} subscribing ${this}`,
+		);
 		this.observers.push(observer);
 	}
 
@@ -216,7 +235,9 @@ class GeolocationService {
 	}
 
 	notifyObservers() {
-		console.log("Notifying observers of location update...");
+		console.log(
+			"(GeolocationService) Notifying observers of location update...",
+		);
 		this.observers.forEach((observer) => {
 			console.log("Notifying observer:", observer);
 			observer.update(this.currentPosition);
@@ -288,7 +309,7 @@ class GeolocationService {
 		}
 
 		return this.getCurrentLocation().then((position) => {
-			console.log("Position obtained:", position);
+			console.log("(GeolocationService) Position obtained:", position);
 			this.currentPosition = position;
 			this.currentCoords = position.coords;
 			this.notifyObservers();
@@ -298,41 +319,72 @@ class GeolocationService {
 }
 
 class WebGeocodingManager {
-	constructor(resultElement) {
-		console.log("Initializing WebGeocodingManager...");
+	constructor(document, resultElement) {
+		console.log("(WebGeocodingManager) Initializing WebGeocodingManager...");
 		this.locationResult = resultElement;
 		this.observers = [];
+		this.geolocationService = new GeolocationService(this.locationResult);
+		this.reverseGeocoder = new ReverseGeocoder();
+		this.currentPosition = null;
+		this.currentCoords = null;
+		this.positionDisplayer = new HTMLPositionDisplayer(locationResult);
+		this.addressDisplayer = new HTMLAddressDisplayer(locationResult);
+
+		this.geolocationService.subscribe(this.positionDisplayer);
+		this.reverseGeocoder.subscribe(this.addressDisplayer);
+
+		console.log("WebGeocodingManager initialized.");
+		this.notifyObservers();
+	}
+
+	initSpeechSynthesis() {
+		this.htmlSpeechSynthesisDisplayer = new HtmlSpeechSynthesisDisplayer(
+			document,
+			{
+				languageSelectId: "language",
+				voiceSelectId: "voice-select",
+				textInputId: "text-input",
+				speakBtnId: "speak-btn",
+				pauseBtnId: "pause-btn",
+				resumeBtnId: "resume-btn",
+				stopBtnId: "stop-btn",
+				rateInputId: "rate",
+				rateValueId: "rate-value",
+				pitchInputId: "pitch",
+				pitchValueId: "pitch-value",
+			},
+		);
+
+		this.reverseGeocoder.subscribe(this.htmlSpeechSynthesisDisplayer);
+
 		Object.freeze(this); // Prevent further modification
 		console.log("WebGeocodingManager initialized.");
 		this.notifyObservers();
 	}
 
 	notifyObservers() {
+		console.log("(WebGeocodingManager) Notifying observers");
 		for (const observer of this.observers) {
 			observer.update(this.currentPosition);
 		}
 	}
 
 	getSingleLocationUpdate() {
-		var geolocationService = new GeolocationService(locationResult);
-		var reverseGeocoder = new ReverseGeocoder();
-		var positionDisplayer = new HTMLPositionDisplayer(locationResult);
-		var addressDisplayer = new HTMLAddressDisplayer(locationResult);
-
-		geolocationService.subscribe(positionDisplayer);
-		reverseGeocoder.subscribe(addressDisplayer);
-
-		geolocationService
+		console.log("(WebGeocodingManager) getSingleLocationUpdate");
+		this.geolocationService
 			.getSingleLocationUpdate()
 			.then((position) => {
-				reverseGeocoder.latitude = position.coords.latitude;
-				reverseGeocoder.longitude = position.coords.longitude;
-				return reverseGeocoder.reverseGeocode();
+				this.reverseGeocoder.latitude = position.coords.latitude;
+				this.reverseGeocoder.longitude = position.coords.longitude;
+				return this.reverseGeocoder.reverseGeocode();
 			})
 			.then((addressData) => {
-				console.log("Address data obtained:", addressData);
-				reverseGeocoder.currentAddress = addressData;
-				reverseGeocoder.notifyObservers();
+				console.log(
+					"(WebGeocodingManager) Address data obtained:",
+					addressData,
+				);
+				this.reverseGeocoder.currentAddress = addressData;
+				this.reverseGeocoder.notifyObservers();
 			})
 			.catch((error) => {
 				displayError(error);
@@ -340,47 +392,27 @@ class WebGeocodingManager {
 	}
 
 	startTracking() {
-		var geolocationService = new GeolocationService(locationResult);
-		var reverseGeocoder = new ReverseGeocoder();
-		var positionDisplayer = new HTMLPositionDisplayer(locationResult);
-		var addressDisplayer = new HTMLAddressDisplayer(locationResult);
-		var htmlSpeechSynthesisDisplayer = new HtmlSpeechSynthesisDisplayer({
-			languageSelectId: "language",
-			voiceSelectId: "voice-select",
-			textInputId: "text-input",
-			speakBtnId: "speak-btn",
-			pauseBtnId: "pause-btn",
-			resumeBtnId: "resume-btn",
-			stopBtnId: "stop-btn",
-			rateInputId: "rate",
-			rateValueId: "rate-value",
-			pitchInputId: "pitch",
-			pitchValueId: "pitch-value",
-		});
-
-		geolocationService.subscribe(positionDisplayer);
-		reverseGeocoder.subscribe(addressDisplayer);
-		reverseGeocoder.subscribe(htmlSpeechSynthesisDisplayer);
-
 		console.log("Starting tracking...");
+
+		this.initSpeechSynthesis();
+
 		/*
     Get current location. Do an initial check to see
     if the user has granted location permissions. Do an immediate
     update.
     */
-
 		console.log("Checking geolocation permissions...");
-		geolocationService
+		this.geolocationService
 			.getSingleLocationUpdate()
 			.then((position) => {
-				reverseGeocoder.latitude = position.coords.latitude;
-				reverseGeocoder.longitude = position.coords.longitude;
-				return reverseGeocoder.reverseGeocode();
+				this.reverseGeocoder.latitude = position.coords.latitude;
+				this.reverseGeocoder.longitude = position.coords.longitude;
+				return this.reverseGeocoder.reverseGeocode();
 			})
 			.then((addressData) => {
 				console.log("Address data obtained:", addressData);
-				reverseGeocoder.currentAddress = addressData;
-				reverseGeocoder.notifyObservers();
+				this.reverseGeocoder.currentAddress = addressData;
+				this.reverseGeocoder.notifyObservers();
 			})
 			.catch((error) => {
 				displayError(error);
@@ -393,17 +425,20 @@ class WebGeocodingManager {
 		// Then set up periodic updates
 		var trackingInterval = setInterval(() => {
 			console.log("Periodic location update...");
-			geolocationService
+			this.geolocationService
 				.getSingleLocationUpdate()
 				.then((position) => {
-					reverseGeocoder.latitude = position.coords.latitude;
-					reverseGeocoder.longitude = position.coords.longitude;
-					return reverseGeocoder.reverseGeocode();
+					this.reverseGeocoder.latitude = position.coords.latitude;
+					this.reverseGeocoder.longitude = position.coords.longitude;
+					return this.reverseGeocoder.reverseGeocode();
 				})
 				.then((addressData) => {
-					console.log("Address data obtained:", addressData);
-					reverseGeocoder.currentAddress = addressData;
-					reverseGeocoder.notifyObservers();
+					console.log(
+						"(WebGeocodingManager) Address data obtained:",
+						addressData,
+					);
+					this.reverseGeocoder.currentAddress = addressData;
+					this.reverseGeocoder.notifyObservers();
 				})
 				.catch((error) => {
 					displayError(error);
@@ -490,13 +525,14 @@ class HTMLPositionDisplayer {
 		}
 	}
 	update(currentCoords, loading, error) {
-		console.log("Updating position display...");
-		console.log("currentCoords:", currentCoords);
+		console.log("(HTMLPositionDisplayer) Updating position display...");
+		console.log("(HTMLPositionDisplayer) currentCoords:", currentCoords);
 		if (loading) {
 			this.element.innerHTML = '<p class="loading">Loading...</p>';
 		} else if (error) {
 			this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
 		} else if (currentCoords) {
+			this.element.innerHTML = "";
 			this.displayPosition(currentCoords);
 		}
 	}
@@ -553,6 +589,7 @@ class AddressDataExtractor {
 
 class HTMLAddressDisplayer {
 	constructor(element) {
+		console.log("(HTMLAddressDisplayer) Initializing...");
 		this.element = element;
 		Object.freeze(this); // Prevent further modification
 	}
@@ -602,7 +639,7 @@ class HTMLAddressDisplayer {
 		console.log("currentAddress:", currentAddress);
 		if (currentAddress) {
 			console.log(
-				"Updating address display with currentAddress:",
+				"(HTMLAddressDisplayer) Updating address display with currentAddress:",
 				currentAddress,
 			);
 			this.displayAddress(currentAddress);
@@ -745,8 +782,9 @@ class SpeechSynthesisManager {
 }
 
 class HtmlSpeechSynthesisDisplayer {
-	constructor(elements) {
+	constructor(document, elements) {
 		console.log("Initializing HtmlSpeechSynthesisDisplayer...");
+		this.document = document;
 		this.elements = elements;
 		console.log("Initializing speech manager...");
 		this.speechManager = new SpeechSynthesisManager();
@@ -760,19 +798,31 @@ class HtmlSpeechSynthesisDisplayer {
 		// Some browsers need this event to load voices
 		// DOM elements
 		console.log("Initializing DOM elements...");
-		this.textInput = document.getElementById(this.elements.textInputId);
-		this.speakBtn = document.getElementById(this.elements.speakBtnId);
+		console.log("elements:", this.elements);
+		this.textInput = this.document.getElementById(this.elements.textInputId);
+		console.log("textInput:", this.textInput);
+		this.speakBtn = this.document.getElementById(this.elements.speakBtnId);
+		console.log("speakBtn:", this.speakBtn);
 		this.pauseBtn = document.getElementById(this.elements.pauseBtnId);
+		console.log("pauseBtn:", this.pauseBtn);
 		this.resumeBtn = document.getElementById(this.elements.resumeBtnId);
+		console.log("resumeBtn:", this.resumeBtn);
 		this.stopBtn = document.getElementById(this.elements.stopBtnId);
+		console.log("stopBtn:", this.stopBtn);
 		this.voiceSelect = document.getElementById(this.elements.voiceSelectId);
+		console.log("voiceSelect:", this.voiceSelect);
 		this.languageSelect = document.getElementById(
 			this.elements.languageSelectId,
 		);
+		console.log("languageSelect:", this.languageSelect);
 		this.rateInput = document.getElementById(this.elements.rateInputId);
+		console.log("rateInput:", this.rateInput);
 		this.pitchInput = document.getElementById(this.elements.pitchInputId);
+		console.log("pitchInput:", this.pitchInput);
 		this.rateValue = document.getElementById(this.elements.rateValueId);
+		console.log("rateValue:", this.rateValue);
 		this.pitchValue = document.getElementById(this.elements.pitchValueId);
+		console.log("pitchValue:", this.pitchValue);
 
 		// Set up event listeners
 		this.speakBtn.addEventListener("click", this.speak);
