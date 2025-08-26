@@ -1157,9 +1157,25 @@ class HtmlSpeechSynthesisDisplayer {
 		this.speechManager.stop();
 	}
 
+	getFullAddress(addressExtractor) {
+		var enderecoPadronizado = addressExtractor.enderecoPadronizado;
+		var parts = [];
+		if (enderecoPadronizado.logradouro) {
+			parts.push(enderecoPadronizado.logradouroCompleto());
+		}
+		if (enderecoPadronizado.bairro) {
+			parts.push(enderecoPadronizado.bairroCompleto());
+		}
+		if (enderecoPadronizado.municipio) {
+			parts.push(enderecoPadronizado.municipio);
+		}
+		return parts.join(", ");
+	}
+
 	buildTextToSpeech(currentAddress) {
 		var addressExtractor = new AddressDataExtractor(currentAddress);
-		return addressExtractor.enderecoPadronizado.bairroCompleto();
+		var textToBeSpoken = `Você está em ${this.getFullAddress(addressExtractor)}.`;
+		return textToBeSpoken;
 	}
 
 	update(currentAddress, error, loading) {
