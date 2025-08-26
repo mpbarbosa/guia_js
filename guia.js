@@ -14,6 +14,13 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 	return R * c;
 }
 
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/* ============================
+ * Camada de Modelo
+ * ============================
+ */
+
 class CurrentPosition {
 	static instance = null;
 
@@ -402,6 +409,8 @@ class GeolocationService {
 			navigator.geolocation.watchPosition(
 				async (position) => {
 					console.log("(GeolocationService) watchPosition callback");
+					await delay(10000); // Wait 10 seconds between updates
+					SingletonStatusManager.getInstace().setGettingLocation(true);
 					if (findRestaurantsBtn) {
 						findRestaurantsBtn.disabled = true;
 					}
