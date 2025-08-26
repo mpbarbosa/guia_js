@@ -14,6 +14,72 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 	return R * c;
 }
 
+class CurrentPosition {
+	static instance = null;
+
+	static getInstance(position) {
+		console.log("CurrentPosition.getInstance");
+		if (!CurrentPosition.instance) {
+			CurrentPosition.instance = new CurrentPosition(position);
+		} else {
+			CurrentPosition.instance.update(position);
+		}
+		return CurrentPosition.instance;
+	}
+
+	constructor(position) {
+		console.log("CurrentPosition constructor");
+		this.observers = [];
+		this.update(position);
+	}
+
+	subscribe(observer) {
+		if (observer) {
+			this.observers.push(observer);
+		}
+	}
+
+	unsubscribe(observer) {
+		this.observers = this.observers.filter((o) => o !== observer);
+	}
+
+	notifyObservers() {
+		console.log("CurrentPosition.notifyObservers");
+		this.observers.forEach((observer) => {
+			console.log("Notifying observer:", observer);
+			observer.update(this);
+		});
+	}
+
+	update(position) {
+		this.position = position;
+		this.coords = position.coords;
+		this.latitude = position.coords.latitude;
+		this.longitude = position.coords.longitude;
+		this.accuracy = position.coords.accuracy;
+		this.altitude = position.coords.altitude;
+		this.altitudeAccuracy = position.coords.altitudeAccuracy;
+		this.heading = position.coords.heading;
+		this.speed = position.coords.speed;
+		this.timestamp = position.timestamp;
+		this.notifyObservers();
+	}
+
+	distanceTo(otherPosition) {
+		return calculateDistance(
+			this.latitude,
+			this.longitude,
+			otherPosition.latitude,
+			otherPosition.longitude,
+		);
+	}
+}
+
+/* ============================
+ * Camada de Serviço
+ * ============================
+ */
+
 class SingletonStatusManager {
 	constructor() {
 		if (SingletonStatusManager.instance) {
@@ -188,6 +254,20 @@ class ReverseGeocoder extends APIFetcher {
 				});
 		});
 	}
+
+	update(position) {
+		console.log("(ReverseGeocoder) update", position);
+		this.setCoordinates(position.coords.latitude, position.coords.longitude);
+		this.reverseGeocode()
+			.then((addressData) => {
+				console.log("(ReverseGeocoder) Address data obtained:", addressData);
+				this.currentAddress = addressData;
+				this.notifyObservers();
+			})
+			.catch((error) => {
+				displayError(error);
+			});
+	}
 }
 
 function getAddressType(address) {
@@ -267,7 +347,7 @@ class GeolocationService {
 	}
 
 	async getCurrentLocation() {
-		console.log("Getting current location...");
+		console.log("(GeolocationService) Getting current location...");
 		this.checkGeolocation();
 		return new Promise(async function (resolve, reject) {
 			// Get current position
@@ -281,8 +361,8 @@ class GeolocationService {
 					if (cityStatsBtn) {
 						cityStatsBtn.disabled = true;
 					}
-					console.log("Position obtained:", position);
-					resolve(position);
+					console.log("(GeolocationService) Position obtained:", position);
+					resolve(CurrentPosition.getInstance(position));
 				},
 				(error) => {
 					reject(error);
@@ -296,8 +376,55 @@ class GeolocationService {
 		});
 	}
 
-	getSingleLocationUpdate() {
-		console.log("Getting single location update...");
+	updatePosition(position) {
+		console.log("(GeolocationService) watchPosition callback");
+		SingletonStatusManager.getInstace().setGettingLocation(true);
+
+		if (findRestaurantsBtn) {
+			findRestaurantsBtn.disabled = true;
+		}
+		if (cityStatsBtn) {
+			cityStatsBtn.disabled = true;
+		}
+		console.log("(GeolocationService) Position obtained:", position);
+		this.currentPosition = position;
+		this.currentCoords = position.coords;
+		console.log("(GeolocationService) Notifying observers...");
+		this.notifyObservers();
+	}
+
+	async watchCurrentLocation() {
+		console.log("(GeolocationService) watchCurrentLocation");
+		console.log("(GeolocationService) Getting current location...");
+		this.checkGeolocation();
+		return new Promise(async function (resolve, reject) {
+			// Get current position
+			navigator.geolocation.watchPosition(
+				async (position) => {
+					console.log("(GeolocationService) watchPosition callback");
+					if (findRestaurantsBtn) {
+						findRestaurantsBtn.disabled = true;
+					}
+					if (cityStatsBtn) {
+						cityStatsBtn.disabled = true;
+					}
+					console.log("(GeolocationService) Position obtained:", position);
+					resolve(CurrentPosition.getInstance(position));
+				},
+				(error) => {
+					reject(error);
+				},
+				{
+					enableHighAccuracy: true,
+					maximumAge: 0, // Don't use a cached position
+					timeout: 10000, // 10 seconds
+				},
+			);
+		});
+	}
+
+	async getSingleLocationUpdate() {
+		console.log("(GeolocationService) Getting single location update...");
 		locationResult.innerHTML =
 			'<p class="loading">Buscando a sua localização...</p>';
 
@@ -316,11 +443,37 @@ class GeolocationService {
 			return position;
 		});
 	}
+
+	async getWatchLocationUpdate() {
+		console.log("(GeolocationService) getWatchLocationUpdate");
+		locationResult.innerHTML =
+			'<p class="loading">Buscando a sua localização...</p>';
+
+		if (findRestaurantsBtn) {
+			findRestaurantsBtn.disabled = true;
+		}
+		if (cityStatsBtn) {
+			cityStatsBtn.disabled = true;
+		}
+
+		return this.watchCurrentLocation().then((position) => {
+			console.log(
+				"(GeolocationService) watchPosition callback received position:",
+				position,
+			);
+			this.currentPosition = position;
+			this.currentCoords = position.coords;
+			console.log("(GeolocationService) Notifying observers...");
+			this.notifyObservers();
+			return position;
+		});
+	}
 }
 
 class WebGeocodingManager {
 	constructor(document, resultElement) {
 		console.log("(WebGeocodingManager) Initializing WebGeocodingManager...");
+		this.document = document;
 		this.locationResult = resultElement;
 		this.observers = [];
 		this.geolocationService = new GeolocationService(this.locationResult);
@@ -333,13 +486,13 @@ class WebGeocodingManager {
 		this.geolocationService.subscribe(this.positionDisplayer);
 		this.reverseGeocoder.subscribe(this.addressDisplayer);
 
-		console.log("WebGeocodingManager initialized.");
+		console.log("(WebGeocodingManager) WebGeocodingManager initialized.");
 		this.notifyObservers();
 	}
 
 	initSpeechSynthesis() {
 		this.htmlSpeechSynthesisDisplayer = new HtmlSpeechSynthesisDisplayer(
-			document,
+			this.document,
 			{
 				languageSelectId: "language",
 				voiceSelectId: "voice-select",
@@ -374,6 +527,7 @@ class WebGeocodingManager {
 		this.geolocationService
 			.getSingleLocationUpdate()
 			.then((position) => {
+				console.log("(WebGeocodingManager) Position obtained:", position);
 				this.reverseGeocoder.latitude = position.coords.latitude;
 				this.reverseGeocoder.longitude = position.coords.longitude;
 				return this.reverseGeocoder.reverseGeocode();
@@ -391,8 +545,27 @@ class WebGeocodingManager {
 			});
 	}
 
+	updatePosition(position) {
+		console.log("(WebGeocodingManager) updatePosition", position);
+		this.reverseGeocoder.latitude = position.coords.latitude;
+		this.reverseGeocoder.longitude = position.coords.longitude;
+		this.reverseGeocoder
+			.reverseGeocode()
+			.then((addressData) => {
+				console.log(
+					"(WebGeocodingManager) Address data obtained:",
+					addressData,
+				);
+				this.reverseGeocoder.currentAddress = addressData;
+				this.reverseGeocoder.notifyObservers();
+			})
+			.catch((error) => {
+				displayError(error);
+			});
+	}
+
 	startTracking() {
-		console.log("Starting tracking...");
+		console.log("(WebGeocodingManager) Starting tracking...");
 
 		this.initSpeechSynthesis();
 
@@ -401,7 +574,7 @@ class WebGeocodingManager {
     if the user has granted location permissions. Do an immediate
     update.
     */
-		console.log("Checking geolocation permissions...");
+		console.log("(WebGeocodingManager) Checking geolocation permissions...");
 		this.geolocationService
 			.getSingleLocationUpdate()
 			.then((position) => {
@@ -410,7 +583,10 @@ class WebGeocodingManager {
 				return this.reverseGeocoder.reverseGeocode();
 			})
 			.then((addressData) => {
-				console.log("Address data obtained:", addressData);
+				console.log(
+					"(WebGeocodingManager) Address data obtained:",
+					addressData,
+				);
 				this.reverseGeocoder.currentAddress = addressData;
 				this.reverseGeocoder.notifyObservers();
 			})
@@ -421,29 +597,13 @@ class WebGeocodingManager {
 			null;
 		}, 20000);
 
-		console.log("Setting up periodic updates...");
-		// Then set up periodic updates
-		var trackingInterval = setInterval(() => {
-			console.log("Periodic location update...");
-			this.geolocationService
-				.getSingleLocationUpdate()
-				.then((position) => {
-					this.reverseGeocoder.latitude = position.coords.latitude;
-					this.reverseGeocoder.longitude = position.coords.longitude;
-					return this.reverseGeocoder.reverseGeocode();
-				})
-				.then((addressData) => {
-					console.log(
-						"(WebGeocodingManager) Address data obtained:",
-						addressData,
-					);
-					this.reverseGeocoder.currentAddress = addressData;
-					this.reverseGeocoder.notifyObservers();
-				})
-				.catch((error) => {
-					displayError(error);
-				});
-		}, 20000); // Update every 20 seconds
+		console.log("(WebGeocodingManager) Setting up periodic updates...");
+		// Start watching position with high accuracy
+		this.geolocationService.getWatchLocationUpdate().then((value) => {
+			value.subscribe(this.positionDisplayer);
+			value.subscribe(this.reverseGeocoder);
+			//value.subscribe(this.htmlSpeechSynthesisDisplayer);
+		});
 	}
 }
 
@@ -460,7 +620,17 @@ class HTMLPositionDisplayer {
 	}
 
 	renderHtmlCoords(position) {
-		console.log("Rendering HTML coordinates...");
+		console.log(
+			"(HTMLPositionDisplayer) Rendering HTML coordinates: " + position,
+		);
+		// Extract coordinates
+		// Format coordinates to 6 decimal places
+		// Display coordinates
+		// Provide link to Google Maps
+		// Provide link to Google Street View
+		if (!position || !position.coords) {
+			return "<p class='error'>No position data available.</p>";
+		}
 		const latitude = position.coords.latitude;
 		const longitude = position.coords.longitude;
 		const altitude = position.coords.altitude;
@@ -468,6 +638,7 @@ class HTMLPositionDisplayer {
 		const precisaoAltitude = position.coords.altitudeAccuracy;
 		const direcao = position.coords.heading; // in degrees
 		const velocidade = position.coords.speed; // in meters per second
+		const timestamp = new Date(position.timestamp).toLocaleString();
 		var html = "";
 		if (latitude) {
 			html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>`;
@@ -489,6 +660,9 @@ class HTMLPositionDisplayer {
 		}
 		if (velocidade) {
 			html += `<p><strong>Velocidade:</strong> ${velocidade.toFixed(2)} m/s</p>`;
+		}
+		if (timestamp) {
+			html += `<p><strong>Timestamp:</strong> ${timestamp}</p>`;
 		}
 
 		html += ` <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a> 
@@ -562,13 +736,20 @@ class EnderecoPadronizado {
 
 class AddressDataExtractor {
 	constructor(data) {
+		console.log("Initializing AddressDataExtractor...");
 		this.data = data;
+		console.log("data:", data);
 		this.enderecoPadronizado = new EnderecoPadronizado();
 		this.padronizaEndereco();
 		Object.freeze(this); // Prevent further modification
 	}
 
 	padronizaEndereco() {
+		console.log("Padronizando endereço...");
+		if (!this.data || !this.data.address) {
+			console.warn("No address data to standardize.");
+			return;
+		}
 		var address = this.data.address;
 		this.enderecoPadronizado.logradouro = address.street || address.road;
 
@@ -635,7 +816,7 @@ class HTMLAddressDisplayer {
 	}
 
 	update(currentAddress, loading, error) {
-		console.log("Updating address display...");
+		console.log("(HTMLAddressDisplayer) Updating address display...");
 		console.log("currentAddress:", currentAddress);
 		if (currentAddress) {
 			console.log(
@@ -667,8 +848,12 @@ function displayError(error) {
 			break;
 	}
 	locationResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
-	findRestaurantsBtn.disabled = true;
-	cityStatsBtn.disabled = true;
+	if (findRestaurantsBtn) {
+		findRestaurantsBtn.disabled = true;
+	}
+	if (cityStatsBtn) {
+		cityStatsBtn.disabled = true;
+	}
 }
 
 /* ============================
@@ -709,7 +894,7 @@ class SpeechSynthesisManager {
 	async loadVoices() {
 		try {
 			const availableVoices = await this.getSpeechVoices();
-			console.log("Voices loaded:", availableVoices);
+			console.log("(SpeechSynthesisManager) Voices loaded:", availableVoices);
 
 			// You can now use the 'voices' array to populate a dropdown, select a specific voice, etc.
 			if (availableVoices.length > 0) {
@@ -717,25 +902,28 @@ class SpeechSynthesisManager {
 				this.filteredVoices = this.voices.filter((voice) =>
 					voice.lang.startsWith(this.language),
 				);
-				console.log("Filtered voices:", this.filteredVoices);
+				console.log(
+					"(SpeechSynthesisManager) Filtered voices:",
+					this.filteredVoices,
+				);
 				if (this.filteredVoices.length > 0) {
 					this.voice = this.filteredVoices[0]; // Default to first voice in filtered list
 				}
 			} else {
 				console.warn(
-					"No voices available for selected language:",
+					"(SpeechSynthesisManager) No voices available for selected language:",
 					this.language,
 				);
 			}
 		} catch (error) {
-			console.error("Error loading voices:", error);
+			console.error("(SpeechSynthesisManager) Error loading voices:", error);
 		}
 	}
 
 	setLanguage(selectedLanguage) {
 		this.language = selectedLanguage;
-		console.log("Setting language to:", this.language);
-		console.log("Loading voices...");
+		console.log("(SpeechSynthesisManager) Setting language to:", this.language);
+		console.log("(SpeechSynthesisManager) Loading voices...");
 		this.loadVoices();
 		this.filteredVoices = this.voices.filter((voice) =>
 			voice.lang.startsWith(this.language),
