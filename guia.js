@@ -409,7 +409,14 @@ class GeolocationService {
 			navigator.geolocation.watchPosition(
 				async (position) => {
 					console.log("(GeolocationService) watchPosition callback");
-					await delay(10000); // Wait 10 seconds between updates
+					console.log(
+						"(GeolocationService) Waiting 10 seconds before next update..." +
+							Date.now(),
+					);
+					await delay(600000); // Wait 60 seconds between updates
+					console.log(
+						"(GeolocationService) Continuing after delay..." + Date.now(),
+					);
 					SingletonStatusManager.getInstace().setGettingLocation(true);
 					if (findRestaurantsBtn) {
 						findRestaurantsBtn.disabled = true;
