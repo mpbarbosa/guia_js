@@ -55,17 +55,18 @@ class CurrentPosition {
 		this.observers = this.observers.filter((o) => o !== observer);
 	}
 
-	notifyObservers(event) {
+	notifyObservers(posEvent) {
 		console.log(
 			"(CurrentPosition) CurrentPosition.notifyObservers: " + this.observers,
 		);
 		this.observers.forEach((observer) => {
 			console.log("(CurrentPosition) Notifying observer:", observer);
-			observer.update(this, event);
+			observer.update(this, posEvent);
 		});
 	}
 
 	update(position) {
+		console.log("-----------------------------------------");
 		console.log("(CurrentPosition) CurrentPosition.update");
 		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
 		if (!position || !position.timestamp) {
@@ -287,18 +288,20 @@ class ReverseGeocoder extends APIFetcher {
 		});
 	}
 
-	update(position) {
-		console.log("(ReverseGeocoder) update", position);
-		this.setCoordinates(position.coords.latitude, position.coords.longitude);
-		this.reverseGeocode()
-			.then((addressData) => {
-				console.log("(ReverseGeocoder) Address data obtained:", addressData);
-				this.currentAddress = addressData;
-				this.notifyObservers();
-			})
-			.catch((error) => {
-				displayError(error);
-			});
+	update(position, posEvent) {
+		if (posEvent == "CurrentPosition updated") {
+			console.log("(ReverseGeocoder) update", position);
+			this.setCoordinates(position.coords.latitude, position.coords.longitude);
+			this.reverseGeocode()
+				.then((addressData) => {
+					console.log("(ReverseGeocoder) Address data obtained:", addressData);
+					this.currentAddress = addressData;
+					this.notifyObservers();
+				})
+				.catch((error) => {
+					displayError(error);
+				});
+		}
 	}
 }
 
@@ -1367,9 +1370,9 @@ class HtmlSpeechSynthesisDisplayer {
 }
 
 class HtmlText {
-	constructor(document, elementId) {
+	constructor(document, element) {
 		this.document = document;
-		this.element = document.getElementById(elementId);
+		this.element = element;
 		Object.freeze(this); // Prevent further modification
 	}
 
@@ -1379,13 +1382,14 @@ class HtmlText {
 		}
 	}
 
-	update(currentPosition, event) {
-		console.log("(HtmlText) update", currentPosition, event);
+	update(currentPosition, posEvent) {
+		console.log("(HtmlText) update", currentPosition, posEvent);
 		if (!currentPosition) {
 			this.updateDisplay("No position data available.");
 			return;
 		}
-		var text = (event || "") + " " + (currentPosition.timestamp || "");
+		var text = (posEvent || "") + " " + (currentPosition.timestamp || "");
+		console.log("(HtmlText) updateDisplay: ", text);
 		this.updateDisplay(text);
 	}
 }
