@@ -53,19 +53,23 @@ class CurrentPosition {
 		this.observers = this.observers.filter((o) => o !== observer);
 	}
 
-	notifyObservers() {
+	notifyObservers(event) {
 		console.log(
 			"(CurrentPosition) CurrentPosition.notifyObservers: " + this.observers,
 		);
 		this.observers.forEach((observer) => {
 			console.log("(CurrentPosition) Notifying observer:", observer);
-			observer.update(this);
+			observer.update(this, event);
 		});
 	}
 
 	update(position) {
 		console.log("(CurrentPosition) CurrentPosition.update");
 		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		if (!position || !position.timestamp) {
+			console.warn("(CurrentPosition) Invalid position data:", position);
+			return;
+		}
 		console.log("(CurrentPosition) position.timestamp:", position.timestamp);
 		console.log(
 			"(CurrentPosition) position.timestamp - this.tsPosicaoAtual:",
@@ -85,7 +89,9 @@ class CurrentPosition {
 			this.timestamp = position.timestamp;
 			this.tsPosicaoAtual = position.timestamp;
 			console.log("(CurrentPosition) CurrentPosition updated:", this);
-			this.notifyObservers();
+			this.notifyObservers("CurrentPosition updated");
+		} else {
+			this.notifyObservers("CurrentPosition not updated");
 		}
 	}
 
@@ -561,6 +567,16 @@ class WebGeocodingManager {
 		} else {
 			console.warn("City Stats button not found.");
 		}
+
+		this.tsPosCapture = this.document.getElementById("tsPosCapture");
+		if (this.tsPosCapture) {
+			this.tsPosCapture.textContent = new Date().toLocaleString();
+			this.posCaptureHtmlText = new HtmlText(this.document, this.tsPosCapture);
+			CurrentPosition.getInstance().subscribe(this.posCaptureHtmlText);
+			Object.freeze(this.posCaptureHtmlText); // Prevent further modification
+		} else {
+			console.warn("tsPosCapture element not found.");
+		}
 	}
 
 	subscribe(observer) {
@@ -747,7 +763,11 @@ class Chronometer {
 		console.log("(Chronometer) update", currentPosition);
 		// Start the chronometer when a new position is received
 		// Stop it if no position is available
-		if (currentPosition) {
+		if (this.timerInterval && currentPosition) {
+			console.log("(Chronometer) Reseting chronometer...");
+			this.reset();
+			this.start();
+		} else if (!this.timerInterval && currentPosition) {
 			console.log("(Chronometer) Starting chronometer...");
 			this.start();
 		} else {
@@ -1340,5 +1360,24 @@ class HtmlSpeechSynthesisDisplayer {
 			this.textInput.value = textToBeSpoken;
 			this.speak(textToBeSpoken);
 		}
+	}
+}
+
+class HtmlText {
+	constructor(document, elementId) {
+		this.document = document;
+		this.element = document.getElementById(elementId);
+		Object.freeze(this); // Prevent further modification
+	}
+
+	updateDisplay(text) {
+		if (this.element) {
+			this.element.textContent = text;
+		}
+	}
+
+	update(currentPosition, event) {
+		var text = event + " " + currentPosition.timestamp;
+		this.updateDisplay(text);
 	}
 }
