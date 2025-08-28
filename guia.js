@@ -44,9 +44,11 @@ class CurrentPosition {
 	}
 
 	subscribe(observer) {
+		console.log(`(CurrentPosition) observer ${observer} subscribing ${this}`);
 		if (observer) {
 			this.observers.push(observer);
 		}
+		console.log(`(CurrentPosition) observers ${this.observers}`);
 	}
 
 	unsubscribe(observer) {
@@ -530,6 +532,7 @@ class WebGeocodingManager {
 	initElements() {
 		var chronometer = this.document.getElementById("chronometer");
 		if (chronometer) {
+			console.log("(WebGeocodingManager) Chronometer element found.");
 			this.chronometer = new Chronometer(chronometer);
 			CurrentPosition.getInstance().subscribe(this.chronometer);
 		} else {
@@ -1377,7 +1380,12 @@ class HtmlText {
 	}
 
 	update(currentPosition, event) {
-		var text = event + " " + currentPosition.timestamp;
+		console.log("(HtmlText) update", currentPosition, event);
+		if (!currentPosition) {
+			this.updateDisplay("No position data available.");
+			return;
+		}
+		var text = (event || "") + " " + (currentPosition.timestamp || "");
 		this.updateDisplay(text);
 	}
 }
