@@ -38,7 +38,9 @@ class CurrentPosition {
 		console.log("CurrentPosition constructor");
 		this.observers = [];
 		this.tsPosicaoAtual = null;
-		this.update(position);
+		if (position) {
+			this.update(position);
+		}
 	}
 
 	subscribe(observer) {
@@ -52,19 +54,21 @@ class CurrentPosition {
 	}
 
 	notifyObservers() {
-		console.log("CurrentPosition.notifyObservers");
+		console.log(
+			"(CurrentPosition) CurrentPosition.notifyObservers: " + this.observers,
+		);
 		this.observers.forEach((observer) => {
-			console.log("Notifying observer:", observer);
+			console.log("(CurrentPosition) Notifying observer:", observer);
 			observer.update(this);
 		});
 	}
 
 	update(position) {
-		console.log("CurrentPosition.update");
-		console.log("this.tsPosicaoAtual:", this.tsPosicaoAtual);
-		console.log("position.timestamp:", position.timestamp);
+		console.log("(CurrentPosition) CurrentPosition.update");
+		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		console.log("(CurrentPosition) position.timestamp:", position.timestamp);
 		console.log(
-			"position.timestamp - this.tsPosicaoAtual:",
+			"(CurrentPosition) position.timestamp - this.tsPosicaoAtual:",
 			position.timestamp - (this.tsPosicaoAtual || 0),
 		);
 		// Atualiza a posição apenas se tiver passado mais de 1 minuto
@@ -80,7 +84,7 @@ class CurrentPosition {
 			this.speed = position.coords.speed;
 			this.timestamp = position.timestamp;
 			this.tsPosicaoAtual = position.timestamp;
-			console.log("CurrentPosition updated:", this);
+			console.log("(CurrentPosition) CurrentPosition updated:", this);
 			this.notifyObservers();
 		}
 	}
@@ -508,11 +512,72 @@ class WebGeocodingManager {
 		this.positionDisplayer = new HTMLPositionDisplayer(locationResult);
 		this.addressDisplayer = new HTMLAddressDisplayer(locationResult);
 
+		this.initElements();
+
 		this.geolocationService.subscribe(this.positionDisplayer);
 		this.reverseGeocoder.subscribe(this.addressDisplayer);
 
 		console.log("(WebGeocodingManager) WebGeocodingManager initialized.");
 		this.notifyObservers();
+	}
+
+	initElements() {
+		var chronometer = this.document.getElementById("chronometer");
+		if (chronometer) {
+			this.chronometer = new Chronometer(chronometer);
+			CurrentPosition.getInstance().subscribe(this.chronometer);
+		} else {
+			console.warn("Chronometer element not found.");
+		}
+
+		this.findRestaurantsBtn = document.getElementById("find-restaurants-btn");
+		if (this.findRestaurantsBtn) {
+			this.findRestaurantsBtn.addEventListener("click", () => {
+				if (this.currentCoords) {
+					findNearbyRestaurants(
+						this.currentCoords.latitude,
+						this.currentCoords.longitude,
+					);
+				} else {
+					alert("Current coordinates not available.");
+				}
+			});
+		} else {
+			console.warn("Find Restaurants button not found.");
+		}
+
+		this.cityStatsBtn = document.getElementById("city-stats-btn");
+		if (this.cityStatsBtn) {
+			this.cityStatsBtn.addEventListener("click", () => {
+				if (this.currentCoords) {
+					fetchCityStatistics(
+						this.currentCoords.latitude,
+						this.currentCoords.longitude,
+					);
+				} else {
+					alert("Current coordinates not available.");
+				}
+			});
+		} else {
+			console.warn("City Stats button not found.");
+		}
+	}
+
+	subscribe(observer) {
+		if (observer == null) {
+			console.warn(
+				"(WebGeocodingManager) Attempted to subscribe a null observer.",
+			);
+			return;
+		}
+		console.log(
+			`(WebGeocodingManager) observer ${observer} subscribing ${this}`,
+		);
+		this.observers.push(observer);
+	}
+
+	unsubscribe(observer) {
+		this.observers = this.observers.filter((o) => o !== observer);
 	}
 
 	initSpeechSynthesis() {
@@ -629,6 +694,67 @@ class WebGeocodingManager {
 			value.subscribe(this.reverseGeocoder);
 			//value.subscribe(this.htmlSpeechSynthesisDisplayer);
 		});
+	}
+}
+
+class Chronometer {
+	constructor(element) {
+		console.log("Initializing Chronometer...");
+		this.element = element;
+		this.startTime = null;
+		this.elapsedTime = 0;
+		this.timerInterval = null;
+	}
+
+	start() {
+		console.log("Starting Chronometer...");
+		if (this.timerInterval) {
+			return; // Already running
+		}
+		this.startTime = Date.now() - this.elapsedTime;
+		this.timerInterval = setInterval(() => {
+			this.elapsedTime = Date.now() - this.startTime;
+			this.updateDisplay();
+		}, 1000);
+	}
+
+	stop() {
+		if (!this.timerInterval) {
+			return; // Not running
+		}
+		clearInterval(this.timerInterval);
+		this.timerInterval = null;
+	}
+
+	reset() {
+		this.stop();
+		this.elapsedTime = 0;
+		this.updateDisplay();
+	}
+
+	updateDisplay() {
+		const totalSeconds = Math.floor(this.elapsedTime / 1000);
+		const hours = Math.floor(totalSeconds / 3600);
+		const minutes = Math.floor((totalSeconds % 3600) / 60);
+		const seconds = totalSeconds % 60;
+
+		this.element.textContent = `${String(hours).padStart(2, "0")}:${String(
+			minutes,
+		).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+	}
+
+	update(currentPosition) {
+		console.log("(Chronometer) update", currentPosition);
+		// Start the chronometer when a new position is received
+		// Stop it if no position is available
+		if (currentPosition) {
+			console.log("(Chronometer) Starting chronometer...");
+			this.start();
+		} else {
+			console.log("(Chronometer) Stopping chronometer...");
+			this.stop();
+			this.reset();
+		}
 	}
 }
 
@@ -972,6 +1098,13 @@ class SpeechSynthesisManager {
 		utterance.voice = this.voice;
 		utterance.rate = this.rate;
 		utterance.pitch = this.pitch;
+		console.log("Speaking with voice:", this.voice);
+		utterance.onend = () => {
+			console.log("Speech synthesis finished.");
+		};
+		utterance.onerror = (event) => {
+			console.error("Speech synthesis error:", event.error);
+		};
 		this.synth.speak(utterance);
 	}
 
