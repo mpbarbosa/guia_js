@@ -37,6 +37,7 @@ class CurrentPosition {
 	constructor(position) {
 		console.log("CurrentPosition constructor");
 		this.observers = [];
+		this.tsPosicaoAtual = null;
 		this.update(position);
 	}
 
@@ -59,17 +60,29 @@ class CurrentPosition {
 	}
 
 	update(position) {
-		this.position = position;
-		this.coords = position.coords;
-		this.latitude = position.coords.latitude;
-		this.longitude = position.coords.longitude;
-		this.accuracy = position.coords.accuracy;
-		this.altitude = position.coords.altitude;
-		this.altitudeAccuracy = position.coords.altitudeAccuracy;
-		this.heading = position.coords.heading;
-		this.speed = position.coords.speed;
-		this.timestamp = position.timestamp;
-		this.notifyObservers();
+		console.log("CurrentPosition.update");
+		console.log("this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		console.log("position.timestamp:", position.timestamp);
+		console.log(
+			"position.timestamp - this.tsPosicaoAtual:",
+			position.timestamp - (this.tsPosicaoAtual || 0),
+		);
+		// Atualiza a posição apenas se tiver passado mais de 1 minuto
+		if (position.timestamp - (this.tsPosicaoAtual || 0) > 60000) {
+			this.position = position;
+			this.coords = position.coords;
+			this.latitude = position.coords.latitude;
+			this.longitude = position.coords.longitude;
+			this.accuracy = position.coords.accuracy;
+			this.altitude = position.coords.altitude;
+			this.altitudeAccuracy = position.coords.altitudeAccuracy;
+			this.heading = position.coords.heading;
+			this.speed = position.coords.speed;
+			this.timestamp = position.timestamp;
+			this.tsPosicaoAtual = position.timestamp;
+			console.log("CurrentPosition updated:", this);
+			this.notifyObservers();
+		}
 	}
 
 	distanceTo(otherPosition) {
@@ -302,6 +315,8 @@ class GeolocationService {
 		this.locationResult = null;
 		this.observers = [];
 		this.gettingLocation = false;
+		this.tsPosicaoAtual = null;
+		this.tsPosicaoAnterior = null;
 	}
 
 	subscribe(observer) {
@@ -377,7 +392,7 @@ class GeolocationService {
 				{
 					enableHighAccuracy: true,
 					maximumAge: 0, // Don't use a cached position
-					timeout: 10000, // 10 seconds
+					timeout: 60000, // 60 seconds
 				},
 			);
 		});
@@ -409,14 +424,7 @@ class GeolocationService {
 			navigator.geolocation.watchPosition(
 				async (position) => {
 					console.log("(GeolocationService) watchPosition callback");
-					console.log(
-						"(GeolocationService) Waiting 60 seconds before next update..." +
-							Date.now().toLocaleString(),
-					);
-					await delay(60000); // Wait 60 seconds between updates
-					console.log(
-						"(GeolocationService) Continuing after delay..." + Date.now(),
-					);
+
 					SingletonStatusManager.getInstace().setGettingLocation(true);
 					if (findRestaurantsBtn) {
 						findRestaurantsBtn.disabled = true;
@@ -425,7 +433,8 @@ class GeolocationService {
 						cityStatsBtn.disabled = true;
 					}
 					console.log("(GeolocationService) Position obtained:", position);
-					resolve(CurrentPosition.getInstance(position));
+					var currentPos = CurrentPosition.getInstance(position);
+					resolve(currentPos);
 				},
 				(error) => {
 					reject(error);
