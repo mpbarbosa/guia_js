@@ -410,10 +410,10 @@ class GeolocationService {
 				async (position) => {
 					console.log("(GeolocationService) watchPosition callback");
 					console.log(
-						"(GeolocationService) Waiting 10 seconds before next update..." +
-							Date.now(),
+						"(GeolocationService) Waiting 60 seconds before next update..." +
+							Date.now().toLocaleString(),
 					);
-					await delay(600000); // Wait 60 seconds between updates
+					await delay(60000); // Wait 60 seconds between updates
 					console.log(
 						"(GeolocationService) Continuing after delay..." + Date.now(),
 					);
