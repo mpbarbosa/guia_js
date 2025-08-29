@@ -486,9 +486,11 @@ class GeolocationService {
 			if (!navigator.geolocation) {
 				element.innerHTML =
 					'<p class="error">O seu navegador não tem a funcionalidade de geolocalização.</p>';
+				console.log("Your browser does not support geolocation.");
 			} else {
 				element.innerHTML +=
 					"<p>O seu navegador tem a funcionalidade de geolocalização.</p>";
+				console.log("Your browser supports geolocation.");
 			}
 		}
 	}
@@ -577,6 +579,9 @@ class GeolocationService {
 		console.log("(GeolocationService) Getting single location update...");
 		locationResult.innerHTML =
 			'<p class="loading">Buscando a sua localização...</p>';
+		console.log("(GeolocationService) locationResult:", locationResult);
+
+		SingletonStatusManager.getInstace().setGettingLocation(true);
 
 		if (findRestaurantsBtn) {
 			findRestaurantsBtn.disabled = true;
@@ -598,6 +603,9 @@ class GeolocationService {
 		console.log("(GeolocationService) getWatchLocationUpdate");
 		locationResult.innerHTML =
 			'<p class="loading">Buscando a sua localização...</p>';
+		console.log("(GeolocationService) locationResult:", locationResult);
+
+		SingletonStatusManager.getInstace().setGettingLocation(true);
 
 		if (findRestaurantsBtn) {
 			findRestaurantsBtn.disabled = true;
@@ -993,6 +1001,7 @@ class HTMLPositionDisplayer {
 		html += loc;
 		// Display coordinates first
 		this.element.innerHTML = html;
+		console.log("(HTMLPositionDisplayer) Coordinates displayed.");
 	}
 
 	displayPosition(position) {
@@ -1024,6 +1033,7 @@ class HTMLPositionDisplayer {
 				this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
 			} else if (currentCoords) {
 				this.element.innerHTML = "";
+				console.log("(HTMLPositionDisplayer) Element cleared.");
 				this.displayPosition(currentPosition);
 			} else {
 				this.element.innerHTML =
@@ -1145,6 +1155,7 @@ class HTMLAddressDisplayer {
 
 	displayAddress(data) {
 		var html = this.renderAddress(data);
+		console.log("(HTMLAddressDisplayer) Address rendered.");
 		this.element.innerHTML += html;
 	}
 
@@ -1380,6 +1391,7 @@ class HtmlSpeechSynthesisDisplayer {
 
 		// Populate voice dropdown
 		this.voiceSelect.innerHTML = "";
+		console.log("(HtmlSpeechSynthesisDisplayer) Voices cleared.");
 		var filteredVoices = this.speechManager.filteredVoices;
 		if (filteredVoices.length > 0) {
 			filteredVoices.forEach((voice, index) => {
