@@ -39,6 +39,7 @@ class CurrentPosition {
 	constructor(position) {
 		console.log("CurrentPosition constructor");
 		this.observers = [];
+		this.accuracyQuality = null;
 		this.tsPosicaoAtual = null;
 		if (position) {
 			this.update(position);
@@ -67,11 +68,40 @@ class CurrentPosition {
 		});
 	}
 
+	static getAccuracyQuality(accuracy) {
+		if (accuracy <= 10) {
+			return "excellent";
+		} else if (accuracy <= 30) {
+			return "good";
+		} else if (accuracy <= 100) {
+			return "medium";
+		} else if (accuracy <= 200) {
+			return "bad";
+		} else {
+			return "very bad";
+		}
+	}
+
+	calculateAccuracyQuality() {
+		return getAccuracyQuality(this.accuracy);
+	}
+
+	set accuracy(value) {
+		this._accuracy = value;
+		this.accuracyQuality = CurrentPosition.getAccuracyQuality(value);
+		console.log("(CurrentPosition) Accuracy set to:", value);
+		console.log("(CurrentPosition) Accuracy quality:", this.accuracyQuality);
+	}
+
 	update(position) {
 		console.log("-----------------------------------------");
 		console.log("(CurrentPosition) CurrentPosition.update");
 		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
 		console.log("(CurrentPosition) position:", position);
+
+		var bUpdateCurrPos = true;
+		var error = null;
+
 		// Verifica se a posição é válida
 		if (!position || !position.timestamp) {
 			console.warn("(CurrentPosition) Invalid position data:", position);
@@ -82,28 +112,58 @@ class CurrentPosition {
 			"(CurrentPosition) position.timestamp - this.tsPosicaoAtual:",
 			position.timestamp - (this.tsPosicaoAtual || 0),
 		);
-		// Atualiza a posição apenas se tiver passado mais de 1 minuto
-		if (position.timestamp - (this.tsPosicaoAtual || 0) > 60000) {
-			this.position = position;
-			this.coords = position.coords;
-			this.latitude = position.coords.latitude;
-			this.longitude = position.coords.longitude;
-			this.accuracy = position.coords.accuracy;
-			this.altitude = position.coords.altitude;
-			this.altitudeAccuracy = position.coords.altitudeAccuracy;
-			this.heading = position.coords.heading;
-			this.speed = position.coords.speed;
-			this.timestamp = position.timestamp;
-			this.tsPosicaoAtual = position.timestamp;
-			console.log("(CurrentPosition) CurrentPosition updated:", this);
-			this.notifyObservers(CurrentPosition.strCurrPosUpdate);
-		} else {
-			this.notifyObservers(CurrentPosition.strCurrPosNotUpdate);
-			console.log(
-				"(CurrentPosition) CurrentPosition not updated. Time since last update:",
-				position.timestamp - this.tsPosicaoAtual,
+
+		if (position.timestamp - (this.tsPosicaoAtual || 0) < 60000) {
+			bUpdateCurrPos = false;
+			error = {
+				name: "ElapseTimeError",
+				message: "Less than 1 minute since last update",
+			};
+			console.warn("(CurrentPosition) Less than 1 minute since last update.");
+		}
+
+		// Verifica se a precisão é boa o suficiente
+		if (
+			CurrentPosition.getAccuracyQuality(position.coords.accuracy) in
+			["medium", "bad", "very bad"]
+		) {
+			bUpdateCurrPos = false;
+			error = { name: "AccuracyError", message: "Accuracy is not good enough" };
+			console.warn(
+				"(CurrentPosition) Accuracy not good enough:",
+				position.coords.accuracy,
 			);
 		}
+
+		if (!bUpdateCurrPos) {
+			this.notifyObservers(CurrentPosition.strCurrPosNotUpdate, null, error);
+			console.log("(CurrentPosition) CurrentPosition not updated:", this);
+			return;
+		}
+
+		// Atualiza a posição apenas se tiver passado mais de 1 minuto
+		console.log("(CurrentPosition) Updating CurrentPosition...");
+		this.position = position;
+		this.coords = position.coords;
+		this.latitude = position.coords.latitude;
+		this.longitude = position.coords.longitude;
+		this.accuracy = position.coords.accuracy;
+		this.accuracyQuality = CurrentPosition.getAccuracyQuality(
+			position.coords.accuracy,
+		);
+		this.altitude = position.coords.altitude;
+		this.altitudeAccuracy = position.coords.altitudeAccuracy;
+		this.heading = position.coords.heading;
+		this.speed = position.coords.speed;
+		this.timestamp = position.timestamp;
+		this.tsPosicaoAtual = position.timestamp;
+		console.log("(CurrentPosition) CurrentPosition updated:", this);
+		this.notifyObservers(CurrentPosition.strCurrPosUpdate, null, error);
+		console.log("(CurrentPosition) Notified observers.");
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.latitude}, ${this.longitude}, ${this.accuracyQuality}, ${this.altitude}, ${this.speed}, ${this.heading}, ${this.timestamp}`;
 	}
 
 	distanceTo(otherPosition) {
@@ -250,7 +310,6 @@ class ReverseGeocoder extends APIFetcher {
 			},
 		});
 		console.log("(ReverseGeocoder) ReverseGeocoder initialized.");
-		this.notifyObservers();
 	}
 
 	setCoordinates(latitude, longitude) {
@@ -349,6 +408,10 @@ class ReverseGeocoder extends APIFetcher {
 					displayError(error);
 				});
 		}
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.latitude}, ${this.longitude}`;
 	}
 }
 
@@ -555,6 +618,10 @@ class GeolocationService {
 			return position;
 		});
 	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.currentCoords ? this.currentCoords.latitude : "N/A"}, ${this.currentCoords ? this.currentCoords.longitude : "N/A"}`;
+	}
 }
 
 class WebGeocodingManager {
@@ -576,7 +643,6 @@ class WebGeocodingManager {
 		this.reverseGeocoder.subscribe(this.addressDisplayer);
 
 		console.log("(WebGeocodingManager) WebGeocodingManager initialized.");
-		this.notifyObservers();
 	}
 
 	initElements() {
@@ -687,9 +753,13 @@ class WebGeocodingManager {
 			.getSingleLocationUpdate()
 			.then((position) => {
 				console.log("(WebGeocodingManager) Position obtained:", position);
-				this.reverseGeocoder.latitude = position.coords.latitude;
-				this.reverseGeocoder.longitude = position.coords.longitude;
-				return this.reverseGeocoder.reverseGeocode();
+				if (position && position.coords) {
+					this.reverseGeocoder.latitude = position.coords.latitude;
+					this.reverseGeocoder.longitude = position.coords.longitude;
+					return this.reverseGeocoder.reverseGeocode();
+				} else {
+					return null;
+				}
 			})
 			.then((addressData) => {
 				console.log(
@@ -764,6 +834,10 @@ class WebGeocodingManager {
 			//value.subscribe(this.htmlSpeechSynthesisDisplayer);
 		});
 	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.currentCoords ? this.currentCoords.latitude : "N/A"}, ${this.currentCoords ? this.currentCoords.longitude : "N/A"}`;
+	}
 }
 
 class Chronometer {
@@ -831,6 +905,10 @@ class Chronometer {
 				this.reset();
 			}
 		}
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.element.textContent}`;
 	}
 }
 
@@ -953,6 +1031,10 @@ class HTMLPositionDisplayer {
 			}
 		}
 	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.element.id}`;
+	}
 }
 
 class EnderecoPadronizado {
@@ -974,6 +1056,10 @@ class EnderecoPadronizado {
 		return this.regiaoCidade
 			? `${this.bairro}, ${this.regiaoCidade}`
 			: this.bairro;
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.logradouroCompleto()}, ${this.bairroCompleto()}, ${this.municipio}`;
 	}
 }
 
@@ -1008,6 +1094,10 @@ class AddressDataExtractor {
 			address.city || address.town || address.municipality || address.county;
 
 		Object.freeze(this.enderecoPadronizado); // Prevent further modification
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.enderecoPadronizado.toString()}`;
 	}
 }
 
@@ -1068,6 +1158,10 @@ class HTMLAddressDisplayer {
 			);
 			this.displayAddress(currentAddress);
 		}
+	}
+
+	toString() {
+		return `${this.constructor.name}: ${this.element.id}`;
 	}
 }
 
@@ -1216,6 +1310,10 @@ class SpeechSynthesisManager {
 		if (this.synth.speaking || this.synth.paused) {
 			this.synth.cancel();
 		}
+	}
+
+	toString() {
+		return `${this.constructor.name}: Language=${this.language}, Rate=${this.rate}, Pitch=${this.pitch}, Voice=${this.voice ? this.voice.name : "N/A"}`;
 	}
 }
 
@@ -1433,6 +1531,10 @@ class HtmlSpeechSynthesisDisplayer {
 			this.speak(textToBeSpoken);
 		}
 	}
+
+	tostring() {
+		return `${this.constructor.name}: ${this.elements.textInputId}`;
+	}
 }
 
 class HtmlText {
@@ -1458,18 +1560,24 @@ class HtmlText {
 		var tsStr = ts.toLocaleString();
 		var posEventStr = posEvent ? `Event: ${posEvent}` : "";
 		var coords = currentPosition.coords;
-		var lat = coords.latitude.toFixed(6);
-		var lon = coords.longitude.toFixed(6);
-		var alt = coords.altitude ? coords.altitude.toFixed(2) + " m" : "N/A";
-		var acc = coords.accuracy ? Math.round(coords.accuracy) + " m" : "N/A";
-		var head = coords.heading ? coords.heading.toFixed(2) + "°" : "N/A";
-		var speed = coords.speed ? coords.speed.toFixed(2) + " m/s" : "N/A";
+		if (coords) {
+			var lat = coords.latitude.toFixed(6);
+			var lon = coords.longitude.toFixed(6);
+			var alt = coords.altitude ? coords.altitude.toFixed(2) + " m" : "N/A";
+			var acc = coords.accuracy ? Math.round(coords.accuracy) + " m" : "N/A";
+			var head = coords.heading ? coords.heading.toFixed(2) + "°" : "N/A";
+			var speed = coords.speed ? coords.speed.toFixed(2) + " m/s" : "N/A";
 
-		var text = posEventStr
-			? `${posEventStr} | Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`
-			: `Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`;
-		text = (text || "") + ", Timestamp: " + (tsStr || "");
-		console.log("(HtmlText) updateDisplay: ", text);
-		this.updateDisplay(text);
+			var text = posEventStr
+				? `${posEventStr} | Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`
+				: `Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`;
+			text = (text || "") + ", Timestamp: " + (tsStr || "");
+			console.log("(HtmlText) updateDisplay: ", text);
+			this.updateDisplay(text);
+		}
+	}
+
+	tostring() {
+		return `${this.constructor.name}: ${this.element.id}`;
 	}
 }
