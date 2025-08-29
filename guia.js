@@ -297,7 +297,46 @@ class ReverseGeocoder extends APIFetcher {
 	}
 
 	update(position, posEvent) {
-		if (posEvent == "CurrentPosition updated") {
+		console.log("(ReverseGeocoder) update called with position:", position);
+		console.log("(ReverseGeocoder) Position event:", posEvent);
+		// Only update if position has changed significantly (more than 20 meters)
+		if (
+			this.lastPosition &&
+			position &&
+			this.latitude &&
+			this.longitude &&
+			position.coords
+		) {
+			const distance = calculateDistance(
+				this.latitude,
+				this.longitude,
+				position.coords.latitude,
+				position.coords.longitude,
+			);
+			console.log(
+				"(ReverseGeocoder) Distance from last position:",
+				distance,
+				"meters",
+			);
+			if (distance < 20) {
+				console.log(
+					"(ReverseGeocoder) Position change is less than 20 meters. Not updating.",
+				);
+				return;
+			}
+		}
+		this.lastPosition = position;
+
+		// Proceed with reverse geocoding if position is updated
+		if (posEvent == CurrentPosition.strCurrPosUpdate) {
+			SingletonStatusManager.getInstace().setGettingLocation(true);
+
+			if (findRestaurantsBtn) {
+				findRestaurantsBtn.disabled = true;
+			}
+			if (cityStatsBtn) {
+				cityStatsBtn.disabled = true;
+			}
 			console.log("(ReverseGeocoder) update", position);
 			this.setCoordinates(position.coords.latitude, position.coords.longitude);
 			this.reverseGeocode()
