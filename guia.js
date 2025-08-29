@@ -1465,10 +1465,10 @@ class HtmlText {
 		var head = coords.heading ? coords.heading.toFixed(2) + "°" : "N/A";
 		var speed = coords.speed ? coords.speed.toFixed(2) + " m/s" : "N/A";
 
-		var posEvent = posEventStr
+		var text = posEventStr
 			? `${posEventStr} | Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`
 			: `Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`;
-		var text = (posEvent || "") + " " + (tsStr || "");
+		text = (text || "") + ", Timestamp: " + (tsStr || "");
 		console.log("(HtmlText) updateDisplay: ", text);
 		this.updateDisplay(text);
 	}
