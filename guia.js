@@ -23,6 +23,8 @@ const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 class CurrentPosition {
 	static instance = null;
+	static strCurrPosUpdate = "CurrentPosition updated";
+	static strCurrPosNotUpdate = "CurrentPosition not updated";
 
 	static getInstance(position) {
 		console.log("CurrentPosition.getInstance");
@@ -69,6 +71,8 @@ class CurrentPosition {
 		console.log("-----------------------------------------");
 		console.log("(CurrentPosition) CurrentPosition.update");
 		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		console.log("(CurrentPosition) position:", position);
+		// Verifica se a posição é válida
 		if (!position || !position.timestamp) {
 			console.warn("(CurrentPosition) Invalid position data:", position);
 			return;
@@ -92,9 +96,13 @@ class CurrentPosition {
 			this.timestamp = position.timestamp;
 			this.tsPosicaoAtual = position.timestamp;
 			console.log("(CurrentPosition) CurrentPosition updated:", this);
-			this.notifyObservers("CurrentPosition updated");
+			this.notifyObservers(CurrentPosition.strCurrPosUpdate);
 		} else {
-			this.notifyObservers("CurrentPosition not updated");
+			this.notifyObservers(CurrentPosition.strCurrPosNotUpdate);
+			console.log(
+				"(CurrentPosition) CurrentPosition not updated. Time since last update:",
+				position.timestamp - this.tsPosicaoAtual,
+			);
 		}
 	}
 
@@ -525,7 +533,7 @@ class WebGeocodingManager {
 
 		this.initElements();
 
-		this.geolocationService.subscribe(this.positionDisplayer);
+		CurrentPosition.getInstance().subscribe(this.positionDisplayer);
 		this.reverseGeocoder.subscribe(this.addressDisplayer);
 
 		console.log("(WebGeocodingManager) WebGeocodingManager initialized.");
@@ -765,21 +773,24 @@ class Chronometer {
 		).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 	}
 
-	update(currentPosition) {
+	update(currentPosition, posEvent) {
 		console.log("(Chronometer) update", currentPosition);
 		// Start the chronometer when a new position is received
 		// Stop it if no position is available
-		if (this.timerInterval && currentPosition) {
-			console.log("(Chronometer) Reseting chronometer...");
-			this.reset();
-			this.start();
-		} else if (!this.timerInterval && currentPosition) {
-			console.log("(Chronometer) Starting chronometer...");
-			this.start();
-		} else {
-			console.log("(Chronometer) Stopping chronometer...");
-			this.stop();
-			this.reset();
+		if (posEvent == CurrentPosition.strCurrPosUpdate) {
+			console.log("(Chronometer) Position event:", posEvent);
+			if (this.timerInterval && currentPosition) {
+				console.log("(Chronometer) Reseting chronometer...");
+				this.reset();
+				this.start();
+			} else if (!this.timerInterval && currentPosition) {
+				console.log("(Chronometer) Starting chronometer...");
+				this.start();
+			} else {
+				console.log("(Chronometer) Stopping chronometer...");
+				this.stop();
+				this.reset();
+			}
 		}
 	}
 }
@@ -875,16 +886,32 @@ class HTMLPositionDisplayer {
 			findRestaurantsBtn.disabled = false;
 		}
 	}
-	update(currentCoords, loading, error) {
+	update(currentPosition, posEvent, loading, error) {
 		console.log("(HTMLPositionDisplayer) Updating position display...");
-		console.log("(HTMLPositionDisplayer) currentCoords:", currentCoords);
-		if (loading) {
-			this.element.innerHTML = '<p class="loading">Loading...</p>';
-		} else if (error) {
-			this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
-		} else if (currentCoords) {
-			this.element.innerHTML = "";
-			this.displayPosition(currentCoords);
+		console.log("(HTMLPositionDisplayer) currentPosition:", currentPosition);
+		console.log("(HTMLPositionDisplayer) loading:", loading);
+		console.log("(HTMLPositionDisplayer) error:", error);
+		console.log("(HTMLPositionDisplayer) Position event:", posEvent);
+		// Extract coordinates
+		// Format coordinates to 6 decimal places
+		// Display coordinates
+		// Provide link to Google Maps
+		// Provide link to Google Street View
+		if (posEvent == CurrentPosition.strCurrPosUpdate) {
+			const currentCoords = currentPosition ? currentPosition.coords : null;
+			// Display loading or error messages if applicable
+			// Otherwise, display the position
+			if (loading) {
+				this.element.innerHTML = '<p class="loading">Loading...</p>';
+			} else if (error) {
+				this.element.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+			} else if (currentCoords) {
+				this.element.innerHTML = "";
+				this.displayPosition(currentPosition);
+			} else {
+				this.element.innerHTML =
+					'<p class="error">No position data available.</p>';
+			}
 		}
 	}
 }
@@ -1388,7 +1415,21 @@ class HtmlText {
 			this.updateDisplay("No position data available.");
 			return;
 		}
-		var text = (posEvent || "") + " " + (currentPosition.timestamp || "");
+		var ts = new Date(currentPosition.timestamp);
+		var tsStr = ts.toLocaleString();
+		var posEventStr = posEvent ? `Event: ${posEvent}` : "";
+		var coords = currentPosition.coords;
+		var lat = coords.latitude.toFixed(6);
+		var lon = coords.longitude.toFixed(6);
+		var alt = coords.altitude ? coords.altitude.toFixed(2) + " m" : "N/A";
+		var acc = coords.accuracy ? Math.round(coords.accuracy) + " m" : "N/A";
+		var head = coords.heading ? coords.heading.toFixed(2) + "°" : "N/A";
+		var speed = coords.speed ? coords.speed.toFixed(2) + " m/s" : "N/A";
+
+		var posEvent = posEventStr
+			? `${posEventStr} | Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`
+			: `Lat: ${lat}, Lon: ${lon}, Alt: ${alt}, Acc: ${acc}, Head: ${head}, Speed: ${speed}`;
+		var text = (posEvent || "") + " " + (tsStr || "");
 		console.log("(HtmlText) updateDisplay: ", text);
 		this.updateDisplay(text);
 	}
