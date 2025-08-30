@@ -135,6 +135,34 @@ class CurrentPosition {
 			);
 		}
 
+		// Only update if position has changed significantly (more than 20 meters)
+		if (
+			this.lastPosition &&
+			position &&
+			this.latitude &&
+			this.longitude &&
+			position.coords
+		) {
+			const distance = calculateDistance(
+				this.latitude,
+				this.longitude,
+				position.coords.latitude,
+				position.coords.longitude,
+			);
+			console.log(
+				"(CurrentPosition) Distance from last position:",
+				distance,
+				"meters",
+			);
+			if (distance < 20) {
+				console.log(
+					"(CurrentPosition) Position change is less than 20 meters. Not updating.",
+				);
+				return;
+			}
+		}
+		this.lastPosition = position;
+
 		if (!bUpdateCurrPos) {
 			this.notifyObservers(CurrentPosition.strCurrPosNotUpdate, null, error);
 			console.log("(CurrentPosition) CurrentPosition not updated:", this);
@@ -358,33 +386,6 @@ class ReverseGeocoder extends APIFetcher {
 	update(position, posEvent) {
 		console.log("(ReverseGeocoder) update called with position:", position);
 		console.log("(ReverseGeocoder) Position event:", posEvent);
-		// Only update if position has changed significantly (more than 20 meters)
-		if (
-			this.lastPosition &&
-			position &&
-			this.latitude &&
-			this.longitude &&
-			position.coords
-		) {
-			const distance = calculateDistance(
-				this.latitude,
-				this.longitude,
-				position.coords.latitude,
-				position.coords.longitude,
-			);
-			console.log(
-				"(ReverseGeocoder) Distance from last position:",
-				distance,
-				"meters",
-			);
-			if (distance < 20) {
-				console.log(
-					"(ReverseGeocoder) Position change is less than 20 meters. Not updating.",
-				);
-				return;
-			}
-		}
-		this.lastPosition = position;
 
 		// Proceed with reverse geocoding if position is updated
 		if (posEvent == CurrentPosition.strCurrPosUpdate) {
