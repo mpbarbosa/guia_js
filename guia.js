@@ -289,7 +289,12 @@ class APIFetcher {
 		console.log("(APIFetcher) Notifying observers: " + this.observers);
 		this.observers.forEach((observer) => {
 			console.log("(APIFetcher) Notifying observer:", observer);
-			observer.update(this.firstUpdateParam(), this.secondUpdateParam(), this.error, this.loading);
+			observer.update(
+				this.firstUpdateParam(),
+				this.secondUpdateParam(),
+				this.error,
+				this.loading,
+			);
 		});
 	}
 
@@ -413,7 +418,8 @@ class ReverseGeocoder extends APIFetcher {
 					this.currentAddress = addressData;
 					//TODO: #23 Remover dependencia de AddressDataExtractor no ReverseGeocoder
 					console.log("(ReverseGeocoder) Extracting standardized address...");
-					this.enderecoPadronizado = AddressDataExtractor.getEnderecoPadronizado(addressData);
+					this.enderecoPadronizado =
+						AddressDataExtractor.getEnderecoPadronizado(addressData);
 					this.notifyObservers();
 				})
 				.catch((error) => {
@@ -520,12 +526,6 @@ class GeolocationService {
 				async (position) => {
 					SingletonStatusManager.getInstace().setGettingLocation(true);
 
-					if (findRestaurantsBtn) {
-						findRestaurantsBtn.disabled = true;
-					}
-					if (cityStatsBtn) {
-						cityStatsBtn.disabled = true;
-					}
 					console.log("(GeolocationService) Position obtained:", position);
 					resolve(CurrentPosition.getInstance(position));
 				},
@@ -569,12 +569,7 @@ class GeolocationService {
 					console.log("(GeolocationService) watchPosition callback");
 
 					SingletonStatusManager.getInstace().setGettingLocation(true);
-					if (findRestaurantsBtn) {
-						findRestaurantsBtn.disabled = true;
-					}
-					if (cityStatsBtn) {
-						cityStatsBtn.disabled = true;
-					}
+
 					console.log("(GeolocationService) Position obtained:", position);
 					var currentPos = CurrentPosition.getInstance(position);
 					resolve(currentPos);
@@ -599,13 +594,6 @@ class GeolocationService {
 
 		SingletonStatusManager.getInstace().setGettingLocation(true);
 
-		if (findRestaurantsBtn) {
-			findRestaurantsBtn.disabled = true;
-		}
-		if (cityStatsBtn) {
-			cityStatsBtn.disabled = true;
-		}
-
 		return this.getCurrentLocation().then((position) => {
 			console.log("(GeolocationService) Position obtained:", position);
 			this.currentPosition = position;
@@ -622,13 +610,6 @@ class GeolocationService {
 		console.log("(GeolocationService) locationResult:", locationResult);
 
 		SingletonStatusManager.getInstace().setGettingLocation(true);
-
-		if (findRestaurantsBtn) {
-			findRestaurantsBtn.disabled = true;
-		}
-		if (cityStatsBtn) {
-			cityStatsBtn.disabled = true;
-		}
 
 		return this.watchCurrentLocation().then((position) => {
 			console.log(
@@ -783,7 +764,6 @@ class WebGeocodingManager {
 
 		this.reverseGeocoder.subscribe(this.htmlSpeechSynthesisDisplayer);
 
-		Object.freeze(this); // Prevent further modification
 		console.log("WebGeocodingManager initialized.");
 		this.notifyObservers();
 	}
@@ -799,10 +779,23 @@ class WebGeocodingManager {
 		console.log("(WebGeocodingManager) Notifying function observers");
 		for (const fn of this.functionObservers) {
 			console.log("(WebGeocodingManager) Notifying function observer:", fn);
-			console.log("(WebGeocodingManager) Current position:", this.currentPosition);
-			console.log("(WebGeocodingManager) Current address:", this.reverseGeocoder.currentAddress);
-			console.log("(WebGeocodingManager) Standardized address:", this.reverseGeocoder.enderecoPadronizado);
-			fn(this.currentPosition, this.reverseGeocoder.currentAddress, this.reverseGeocoder.enderecoPadronizado);
+			console.log(
+				"(WebGeocodingManager) Current position:",
+				this.currentPosition,
+			);
+			console.log(
+				"(WebGeocodingManager) Current address:",
+				this.reverseGeocoder.currentAddress,
+			);
+			console.log(
+				"(WebGeocodingManager) Standardized address:",
+				this.reverseGeocoder.enderecoPadronizado,
+			);
+			fn(
+				this.currentPosition,
+				this.reverseGeocoder.currentAddress,
+				this.reverseGeocoder.enderecoPadronizado,
+			);
 		}
 	}
 
@@ -827,7 +820,8 @@ class WebGeocodingManager {
 					addressData,
 				);
 				this.reverseGeocoder.currentAddress = addressData;
-				this.reverseGeocoder.enderecoPadronizado = AddressDataExtractor.getEnderecoPadronizado(addressData);
+				this.reverseGeocoder.enderecoPadronizado =
+					AddressDataExtractor.getEnderecoPadronizado(addressData);
 				this.reverseGeocoder.notifyObservers();
 				this.notifyFunctionObservers();
 			})
@@ -866,24 +860,11 @@ class WebGeocodingManager {
     update.
     */
 		console.log("(WebGeocodingManager) Checking geolocation permissions...");
-		this.geolocationService
-			.getSingleLocationUpdate()
-			.then((position) => {
-				this.reverseGeocoder.latitude = position.coords.latitude;
-				this.reverseGeocoder.longitude = position.coords.longitude;
-				return this.reverseGeocoder.reverseGeocode();
-			})
-			.then((addressData) => {
-				console.log(
-					"(WebGeocodingManager) Address data obtained:",
-					addressData,
-				);
-				this.reverseGeocoder.currentAddress = addressData;
-				this.reverseGeocoder.notifyObservers();
-			})
-			.catch((error) => {
-				displayError(error);
-			});
+
+		//this.geolocationService.checkPermissions().then((value) => {
+		this.getSingleLocationUpdate();
+		//});
+
 		setTimeout(() => {
 			null;
 		}, 20000);
@@ -900,7 +881,6 @@ class WebGeocodingManager {
 	toString() {
 		return `${this.constructor.name}: ${this.currentCoords ? this.currentCoords.latitude : "N/A"}, ${this.currentCoords ? this.currentCoords.longitude : "N/A"}`;
 	}
-
 }
 
 class Chronometer {
@@ -1061,12 +1041,8 @@ class HTMLPositionDisplayer {
 
 	displayPosition(position) {
 		this.showCoords(position);
-
-		// Enable buttons
-		if (findRestaurantsBtn) {
-			findRestaurantsBtn.disabled = false;
-		}
 	}
+
 	update(currentPosition, posEvent, loading, error) {
 		console.log("(HTMLPositionDisplayer) Updating position display...");
 		console.log("(HTMLPositionDisplayer) currentPosition:", currentPosition);
@@ -1207,7 +1183,10 @@ class HTMLAddressDisplayer {
 
 	renderAddress(data, enderecoPadronizado) {
 		console.log("(HTMLAddressDisplayer) Rendering address:", data);
-		console.log("(HTMLAddressDisplayer) enderecoPadronizado:", enderecoPadronizado);
+		console.log(
+			"(HTMLAddressDisplayer) enderecoPadronizado:",
+			enderecoPadronizado,
+		);
 		// Render address data into HTML
 		// Display address components in a structured format
 		// Handle missing components gracefully
@@ -1267,7 +1246,10 @@ class HTMLAddressDisplayer {
 	update(currentAddress, enderecoPadronizado, loading, error) {
 		console.log("(HTMLAddressDisplayer) Updating address display...");
 		console.log("(HTMLAddressDisplayer) currentAddress:", currentAddress);
-		console.log("(HTMLAddressDisplayer) enderecoPadronizado:", enderecoPadronizado);
+		console.log(
+			"(HTMLAddressDisplayer) enderecoPadronizado:",
+			enderecoPadronizado,
+		);
 		if (currentAddress) {
 			console.log(
 				"(HTMLAddressDisplayer) Updating address display with currentAddress:",
