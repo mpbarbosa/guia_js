@@ -289,8 +289,16 @@ class APIFetcher {
 		console.log("(APIFetcher) Notifying observers: " + this.observers);
 		this.observers.forEach((observer) => {
 			console.log("(APIFetcher) Notifying observer:", observer);
-			observer.update(this.data, this.error, this.loading);
+			observer.update(this.firstUpdateParam(), this.secondUpdateParam(), this.error, this.loading);
 		});
+	}
+
+	firstUpdateParam() {
+		return this.data;
+	}
+
+	secondUpdateParam() {
+		return null;
 	}
 
 	async fetchData() {
@@ -403,6 +411,9 @@ class ReverseGeocoder extends APIFetcher {
 				.then((addressData) => {
 					console.log("(ReverseGeocoder) Address data obtained:", addressData);
 					this.currentAddress = addressData;
+					//TODO: #23 Remover dependencia de AddressDataExtractor no ReverseGeocoder
+					console.log("(ReverseGeocoder) Extracting standardized address...");
+					this.enderecoPadronizado = AddressDataExtractor.getEnderecoPadronizado(addressData);
 					this.notifyObservers();
 				})
 				.catch((error) => {
@@ -413,6 +424,10 @@ class ReverseGeocoder extends APIFetcher {
 
 	toString() {
 		return `${this.constructor.name}: ${this.latitude}, ${this.longitude}`;
+	}
+
+	secondUpdateParam() {
+		return this.enderecoPadronizado;
 	}
 }
 
@@ -639,6 +654,7 @@ class WebGeocodingManager {
 		this.document = document;
 		this.locationResult = resultElement;
 		this.observers = [];
+		this.functionObservers = [];
 		this.geolocationService = new GeolocationService(this.locationResult);
 		this.reverseGeocoder = new ReverseGeocoder();
 		this.currentPosition = null;
@@ -724,6 +740,29 @@ class WebGeocodingManager {
 		this.observers = this.observers.filter((o) => o !== observer);
 	}
 
+	subscribeFunction(observerFunction) {
+		if (observerFunction == null) {
+			console.warn(
+				"(WebGeocodingManager) Attempted to subscribe a null observer function.",
+			);
+			return;
+		}
+		console.log(
+			`(WebGeocodingManager) observer function ${observerFunction} subscribing ${this}`,
+		);
+		this.functionObservers.push(observerFunction);
+	}
+
+	unsubscribeFunction(observerFunction) {
+		this.functionObservers = this.functionObservers.filter(
+			(fn) => fn !== observerFunction,
+		);
+	}
+
+	getEnderecoPadronizado() {
+		return this.reverseGeocoder.enderecoPadronizado;
+	}
+
 	initSpeechSynthesis() {
 		this.htmlSpeechSynthesisDisplayer = new HtmlSpeechSynthesisDisplayer(
 			this.document,
@@ -756,6 +795,17 @@ class WebGeocodingManager {
 		}
 	}
 
+	notifyFunctionObservers() {
+		console.log("(WebGeocodingManager) Notifying function observers");
+		for (const fn of this.functionObservers) {
+			console.log("(WebGeocodingManager) Notifying function observer:", fn);
+			console.log("(WebGeocodingManager) Current position:", this.currentPosition);
+			console.log("(WebGeocodingManager) Current address:", this.reverseGeocoder.currentAddress);
+			console.log("(WebGeocodingManager) Standardized address:", this.reverseGeocoder.enderecoPadronizado);
+			fn(this.currentPosition, this.reverseGeocoder.currentAddress, this.reverseGeocoder.enderecoPadronizado);
+		}
+	}
+
 	getSingleLocationUpdate() {
 		console.log("(WebGeocodingManager) getSingleLocationUpdate");
 		this.geolocationService
@@ -763,6 +813,7 @@ class WebGeocodingManager {
 			.then((position) => {
 				console.log("(WebGeocodingManager) Position obtained:", position);
 				if (position && position.coords) {
+					this.currentPosition = position;
 					this.reverseGeocoder.latitude = position.coords.latitude;
 					this.reverseGeocoder.longitude = position.coords.longitude;
 					return this.reverseGeocoder.reverseGeocode();
@@ -776,7 +827,9 @@ class WebGeocodingManager {
 					addressData,
 				);
 				this.reverseGeocoder.currentAddress = addressData;
+				this.reverseGeocoder.enderecoPadronizado = AddressDataExtractor.getEnderecoPadronizado(addressData);
 				this.reverseGeocoder.notifyObservers();
+				this.notifyFunctionObservers();
 			})
 			.catch((error) => {
 				displayError(error);
@@ -847,6 +900,7 @@ class WebGeocodingManager {
 	toString() {
 		return `${this.constructor.name}: ${this.currentCoords ? this.currentCoords.latitude : "N/A"}, ${this.currentCoords ? this.currentCoords.longitude : "N/A"}`;
 	}
+
 }
 
 class Chronometer {
@@ -1055,6 +1109,11 @@ class EnderecoPadronizado {
 		this.house_number = null;
 		this.bairro = null;
 		this.regiaoCidade = null;
+		this.uf = null;
+		this.siglaUf = null;
+		this.cep = null;
+		this.pais = null;
+		this.codigoPais = null;
 	}
 
 	logradouroCompleto() {
@@ -1104,11 +1163,38 @@ class AddressDataExtractor {
 		this.enderecoPadronizado.municipio =
 			address.city || address.town || address.municipality || address.county;
 
+		console.log("address.state:", address.state);
+		this.enderecoPadronizado.uf = address.state || "";
+
+		this.enderecoPadronizado.cep = address.postcode || "";
+
+		this.enderecoPadronizado.pais = address.country || "";
+
+		this.enderecoPadronizado.codigoPais = address.country_code
+			? address.country_code.toUpperCase()
+			: "";
+
+		// Extract state code from ISO3166-2-lvl4 if available
+		// Example format: "BR-SP" for São Paulo, Brazil
+		console.log("this.data['ISO3166-2-lvl4']:", address["ISO3166-2-lvl4"]);
+		if (address["ISO3166-2-lvl4"]) {
+			var pattern = /^BR-(\w{2})$/;
+			var match = address["ISO3166-2-lvl4"].match(pattern);
+			if (match) {
+				this.enderecoPadronizado.siglaUf = match[1];
+			}
+		}
+
 		Object.freeze(this.enderecoPadronizado); // Prevent further modification
 	}
 
 	toString() {
 		return `${this.constructor.name}: ${this.enderecoPadronizado.toString()}`;
+	}
+
+	static getEnderecoPadronizado(data) {
+		const extractor = new AddressDataExtractor(data);
+		return extractor.enderecoPadronizado;
 	}
 }
 
@@ -1119,7 +1205,21 @@ class HTMLAddressDisplayer {
 		Object.freeze(this); // Prevent further modification
 	}
 
-	renderAddress(data) {
+	renderAddress(data, enderecoPadronizado) {
+		console.log("(HTMLAddressDisplayer) Rendering address:", data);
+		console.log("(HTMLAddressDisplayer) enderecoPadronizado:", enderecoPadronizado);
+		// Render address data into HTML
+		// Display address components in a structured format
+		// Handle missing components gracefully
+		// Include links to view the address on a map service if coordinates are available
+		// Return the generated HTML string
+
+		// Check if data is valid
+		if (!data || !data.address) {
+			return "<p class='error'>No address data available.</p>";
+		}
+
+		// Determine address type
 		var addressTypeDescr;
 
 		addressTypeDescr = getAddressType(data);
@@ -1127,8 +1227,6 @@ class HTMLAddressDisplayer {
 		var html = "";
 
 		if (data.address) {
-			var extractor = new AddressDataExtractor(data);
-			var enderecoPadronizado = extractor.enderecoPadronizado;
 			html += `<p><strong>Tipo:</strong> ${addressTypeDescr}<br>`;
 			html += "<p><strong>Address Details:</strong></p><ul>";
 			for (const [key, value] of Object.entries(data.address)) {
@@ -1136,9 +1234,15 @@ class HTMLAddressDisplayer {
 			}
 			html += "</ul>";
 
-			html += ` <strong>Logradouro/Número:</strong> ${enderecoPadronizado.logradouroCompleto()}<br>
+			if (enderecoPadronizado) {
+				html += ` <strong>Logradouro/Número:</strong> ${enderecoPadronizado.logradouroCompleto()}<br>
     <strong>Bairro:</strong> ${enderecoPadronizado.bairroCompleto()}<br>
-    <strong>Município/Cidade:</strong> ${enderecoPadronizado.municipio}<br>
+    <strong>Município/Cidade:</strong> ${enderecoPadronizado.municipio}<br>`;
+			}
+
+			html += `<p><strong>Detalhes do endereço (raw):</strong><br>
+	${data.address.road || data.address.street || ""} ${data.address.house_number || ""}<br>
+	${data.address.neighbourhood || data.address.suburb || ""}<br>
     ${data.address.municipality}<br>
     ${data.address.county}<br>
     <strong>UF:</strong> ${data.address.state}<br>
@@ -1154,21 +1258,22 @@ class HTMLAddressDisplayer {
 		return html;
 	}
 
-	displayAddress(data) {
-		var html = this.renderAddress(data);
+	displayAddress(data, enderecoPadronizado) {
+		var html = this.renderAddress(data, enderecoPadronizado);
 		console.log("(HTMLAddressDisplayer) Address rendered.");
 		this.element.innerHTML += html;
 	}
 
-	update(currentAddress, loading, error) {
+	update(currentAddress, enderecoPadronizado, loading, error) {
 		console.log("(HTMLAddressDisplayer) Updating address display...");
-		console.log("currentAddress:", currentAddress);
+		console.log("(HTMLAddressDisplayer) currentAddress:", currentAddress);
+		console.log("(HTMLAddressDisplayer) enderecoPadronizado:", enderecoPadronizado);
 		if (currentAddress) {
 			console.log(
 				"(HTMLAddressDisplayer) Updating address display with currentAddress:",
 				currentAddress,
 			);
-			this.displayAddress(currentAddress);
+			this.displayAddress(currentAddress, enderecoPadronizado);
 		}
 	}
 
