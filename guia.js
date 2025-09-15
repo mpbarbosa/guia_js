@@ -636,14 +636,17 @@ class WebGeocodingManager {
 		this.locationResult = resultElement;
 		this.observers = [];
 		this.functionObservers = [];
-		this.geolocationService = new GeolocationService(this.locationResult);
-		this.reverseGeocoder = new ReverseGeocoder();
 		this.currentPosition = null;
 		this.currentCoords = null;
+		
+		this.initElements();
+
+		this.geolocationService = new GeolocationService(this.locationResult);
+		this.reverseGeocoder = new ReverseGeocoder();
+
 		this.positionDisplayer = new HTMLPositionDisplayer(locationResult);
 		this.addressDisplayer = new HTMLAddressDisplayer(locationResult);
 
-		this.initElements();
 
 		CurrentPosition.getInstance().subscribe(this.positionDisplayer);
 		this.reverseGeocoder.subscribe(this.addressDisplayer);
@@ -1303,7 +1306,7 @@ class SpeechSynthesisManager {
 		this.synth = window.speechSynthesis;
 		this.language = "pt-BR"; // Default language
 		this.voices = [];
-		this.fileteredVoices = [];
+		this.filteredVoices = [];
 		this.rate = 1;
 		this.pitch = 1;
 		this.voice = null;
@@ -1464,18 +1467,19 @@ class HtmlSpeechSynthesisDisplayer {
 		this.pauseBtn.addEventListener("click", this.pauseSpeech);
 		this.resumeBtn.addEventListener("click", this.resumeSpeech);
 		this.stopBtn.addEventListener("click", this.stopSpeech);
-		this.languageSelect.addEventListener("change", this.loadVoices);
+		this.languageSelect.addEventListener("change", this.updateVoices);
 		this.voiceSelect.addEventListener("change", () => {
 			this.speechManager.selectedVoiceIndex(this.voiceSelect.value);
+			this.updateVoices();
 		});
 		this.rateInput.addEventListener("input", this.updateRate);
 		this.pitchInput.addEventListener("input", this.updatePitch);
 
-		this.loadVoices();
+		this.updateVoices();
 	}
 	// Load available voices
-	loadVoices() {
-		this.speechManager.setLanguage(this.languageSelect.value);
+	updateVoices() {
+		//this.speechManager.setLanguage(this.languageSelect.value);
 
 		// Populate voice dropdown
 		this.voiceSelect.innerHTML = "";
@@ -1623,7 +1627,7 @@ class HtmlSpeechSynthesisDisplayer {
 		);
 		console.log("currentAddress:", currentAddress);
 		if (currentAddress) {
-			this.loadVoices();
+			this.updateVoices();
 			var textToBeSpoken = "";
 			textToBeSpoken += this.buildTextToSpeech(currentAddress);
 			console.log("textToBeSpoken:", textToBeSpoken);
