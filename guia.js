@@ -404,12 +404,6 @@ class ReverseGeocoder extends APIFetcher {
 		if (posEvent == CurrentPosition.strCurrPosUpdate) {
 			SingletonStatusManager.getInstace().setGettingLocation(true);
 
-			if (findRestaurantsBtn) {
-				findRestaurantsBtn.disabled = true;
-			}
-			if (cityStatsBtn) {
-				cityStatsBtn.disabled = true;
-			}
 			console.log("(ReverseGeocoder) update", position);
 			this.setCoordinates(position.coords.latitude, position.coords.longitude);
 			this.reverseGeocode()
@@ -1258,6 +1252,12 @@ class HTMLAddressDisplayer {
 				"(HTMLAddressDisplayer) Updating address display with currentAddress:",
 				currentAddress,
 			);
+			if (this.findRestaurantsBtn) {
+				this.findRestaurantsBtn.disabled = true;
+			}
+			if (this.cityStatsBtn) {
+				this.cityStatsBtn.disabled = true;
+			}
 			this.displayAddress(currentAddress, enderecoPadronizado);
 		}
 	}
