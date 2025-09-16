@@ -16,6 +16,28 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+const log = (message, ...params) => {
+	//get all params after message and concatenate them
+  const fullMessage = `[${new Date().toISOString()}] ${message} ${params.join(" ")}`;
+  console.log(fullMessage);
+  if (typeof document !== 'undefined') {
+	//TODO: Remover a referência direta ao elemento HTML
+    if (document.getElementById("bottom-scroll-textarea")) {
+      (document.getElementById("bottom-scroll-textarea")).innerHTML += `${fullMessage}\n`;
+    }
+  }
+};
+
+const warn = (message) => {
+  console.warn(message);
+  if (typeof document !== 'undefined') {
+    const logContainer = document.getElementById("bottom-scroll-textarea");
+    if (logContainer) {
+      logContainer.innerHTML += `${message}\n`;
+    }
+  }
+};
+
 /* ============================
  * Camada de Modelo
  * ============================
@@ -59,7 +81,7 @@ class CurrentPosition {
 	}
 
 	notifyObservers(posEvent) {
-		console.log(
+		log(
 			"(CurrentPosition) CurrentPosition.notifyObservers: " + this.observers,
 		);
 		this.observers.forEach((observer) => {
@@ -94,21 +116,21 @@ class CurrentPosition {
 	}
 
 	update(position) {
-		console.log("-----------------------------------------");
-		console.log("(CurrentPosition) CurrentPosition.update");
-		console.log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
-		console.log("(CurrentPosition) position:", position);
+		log("-----------------------------------------");
+		log("(CurrentPosition) CurrentPosition.update");
+		log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		log("(CurrentPosition) position:", position);
 
 		var bUpdateCurrPos = true;
 		var error = null;
 
 		// Verifica se a posição é válida
 		if (!position || !position.timestamp) {
-			console.warn("(CurrentPosition) Invalid position data:", position);
+			warn("(CurrentPosition) Invalid position data:", position);
 			return;
 		}
-		console.log("(CurrentPosition) position.timestamp:", position.timestamp);
-		console.log(
+		log("(CurrentPosition) position.timestamp:", position.timestamp);
+		log(
 			"(CurrentPosition) position.timestamp - this.tsPosicaoAtual:",
 			position.timestamp - (this.tsPosicaoAtual || 0),
 		);
@@ -119,7 +141,7 @@ class CurrentPosition {
 				name: "ElapseTimeError",
 				message: "Less than 1 minute since last update",
 			};
-			console.warn("(CurrentPosition) Less than 1 minute since last update.");
+			warn("(CurrentPosition) Less than 1 minute since last update.");
 		}
 
 		// Verifica se a precisão é boa o suficiente
@@ -129,7 +151,7 @@ class CurrentPosition {
 		) {
 			bUpdateCurrPos = false;
 			error = { name: "AccuracyError", message: "Accuracy is not good enough" };
-			console.warn(
+			warn(
 				"(CurrentPosition) Accuracy not good enough:",
 				position.coords.accuracy,
 			);
@@ -286,9 +308,11 @@ class APIFetcher {
 	}
 
 	notifyObservers() {
-		console.log("(APIFetcher) Notifying observers: " + this.observers);
+		log("(APIFetcher) Notifying observers: " + this.observers);
 		this.observers.forEach((observer) => {
-			console.log("(APIFetcher) Notifying observer:", observer);
+			log("(APIFetcher) Notifying observer:", observer);
+			log("First param:", this.firstUpdateParam());
+			log("Second param:", this.secondUpdateParam());
 			observer.update(
 				this.firstUpdateParam(),
 				this.secondUpdateParam(),
@@ -847,7 +871,7 @@ class WebGeocodingManager {
 	}
 
 	startTracking() {
-		console.log("(WebGeocodingManager) Starting tracking...");
+		log("(WebGeocodingManager) Starting tracking...");
 
 		this.initSpeechSynthesis();
 
@@ -856,7 +880,7 @@ class WebGeocodingManager {
     if the user has granted location permissions. Do an immediate
     update.
     */
-		console.log("(WebGeocodingManager) Checking geolocation permissions...");
+		log("(WebGeocodingManager) Checking geolocation permissions...");
 
 		//this.geolocationService.checkPermissions().then((value) => {
 		this.getSingleLocationUpdate();
@@ -866,7 +890,7 @@ class WebGeocodingManager {
 			null;
 		}, 20000);
 
-		console.log("(WebGeocodingManager) Setting up periodic updates...");
+		log("(WebGeocodingManager) Setting up periodic updates...");
 		// Start watching position with high accuracy
 		this.geolocationService.getWatchLocationUpdate().then((value) => {
 			value.subscribe(this.positionDisplayer);
@@ -1302,7 +1326,7 @@ function displayError(error) {
 
 class SpeechSynthesisManager {
 	constructor() {
-		console.log("Initializing speech manager...");
+		log("Initializing speech manager...");
 		this.synth = window.speechSynthesis;
 		this.language = "pt-BR"; // Default language
 		this.voices = [];
@@ -1333,7 +1357,7 @@ class SpeechSynthesisManager {
 	async loadVoices() {
 		try {
 			const availableVoices = await this.getSpeechVoices();
-			console.log("(SpeechSynthesisManager) Voices loaded:", availableVoices);
+			log("(SpeechSynthesisManager) Voices loaded:", availableVoices);
 
 			// You can now use the 'voices' array to populate a dropdown, select a specific voice, etc.
 			if (availableVoices.length > 0) {
@@ -1341,7 +1365,7 @@ class SpeechSynthesisManager {
 				this.filteredVoices = this.voices.filter((voice) =>
 					voice.lang.startsWith(this.language),
 				);
-				console.log(
+				log(
 					"(SpeechSynthesisManager) Filtered voices:",
 					this.filteredVoices,
 				);
@@ -1349,7 +1373,7 @@ class SpeechSynthesisManager {
 					this.voice = this.filteredVoices[0]; // Default to first voice in filtered list
 				}
 			} else {
-				console.warn(
+				warn(
 					"(SpeechSynthesisManager) No voices available for selected language:",
 					this.language,
 				);
@@ -1361,8 +1385,8 @@ class SpeechSynthesisManager {
 
 	setLanguage(selectedLanguage) {
 		this.language = selectedLanguage;
-		console.log("(SpeechSynthesisManager) Setting language to:", this.language);
-		console.log("(SpeechSynthesisManager) Loading voices...");
+		log("(SpeechSynthesisManager) Setting language to:", this.language);
+		log("(SpeechSynthesisManager) Loading voices...");
 		this.loadVoices();
 		this.filteredVoices = this.voices.filter((voice) =>
 			voice.lang.startsWith(this.language),
@@ -1370,30 +1394,33 @@ class SpeechSynthesisManager {
 		if (this.filteredVoices.length > 0) {
 			this.voice = this.filteredVoices[0]; // Default to first voice in filtered list
 		}
-		console.log("Filtered voices:", this.filteredVoices);
+		log("Filtered voices:", this.filteredVoices);
 	}
 
 	setSelectectedVoiceIndex(index) {
-		console.log("Setting selected voice index to:", index);
+		log("Setting selected voice index to:", index);
 	}
 
 	speak(text) {
 		if (this.synth.speaking) {
-			console.warn("Speech synthesis is already speaking.");
+			warn("Speech synthesis is already speaking.");
 			return;
 		}
 		const utterance = new SpeechSynthesisUtterance(text);
 		utterance.voice = this.voice;
 		utterance.rate = this.rate;
 		utterance.pitch = this.pitch;
-		console.log("Speaking with voice:", this.voice);
+		log("Speaking with voice:", this.voice);
 		utterance.onend = () => {
-			console.log("Speech synthesis finished.");
+			log("Spoke with voice:", this.voice);
+			log("Speech synthesis finished.");
 		};
 		utterance.onerror = (event) => {
-			console.error("Speech synthesis error:", event.error);
+			log("Speech synthesis error:", event.error);
 		};
+		log("Starting speech synthesis...");
 		this.synth.speak(utterance);
+		log("Speech synthesis started.");
 	}
 
 	pause() {
@@ -1421,12 +1448,12 @@ class SpeechSynthesisManager {
 
 class HtmlSpeechSynthesisDisplayer {
 	constructor(document, elements) {
-		console.log("Initializing HtmlSpeechSynthesisDisplayer...");
+		log("Initializing HtmlSpeechSynthesisDisplayer...");
 		this.document = document;
 		this.elements = elements;
-		console.log("Initializing speech manager...");
+		log("Initializing speech manager...");
 		this.speechManager = new SpeechSynthesisManager();
-		console.log("Speech manager initialized.");
+		log("Speech manager initialized.");
 		this.init();
 		Object.freeze(this); // Prevent further modification
 	}
@@ -1483,7 +1510,7 @@ class HtmlSpeechSynthesisDisplayer {
 
 		// Populate voice dropdown
 		this.voiceSelect.innerHTML = "";
-		console.log("(HtmlSpeechSynthesisDisplayer) Voices cleared.");
+		log("(HtmlSpeechSynthesisDisplayer) Voices cleared.");
 		var filteredVoices = this.speechManager.filteredVoices;
 		if (filteredVoices.length > 0) {
 			filteredVoices.forEach((voice, index) => {
@@ -1496,7 +1523,7 @@ class HtmlSpeechSynthesisDisplayer {
 			const option = document.createElement("option");
 			option.textContent = "No voices available for selected language";
 			this.voiceSelect.appendChild(option);
-			console.warn(
+			warn(
 				"No voices available for language:",
 				this.speechManager.language,
 			);
@@ -1622,15 +1649,15 @@ class HtmlSpeechSynthesisDisplayer {
 	}
 
 	update(currentAddress, error, loading) {
-		console.log(
+		log(
 			"(HtmlSpeechSynthesisDisplayer) Updating speech synthesis display...",
 		);
-		console.log("currentAddress:", currentAddress);
+		log("currentAddress:", currentAddress);
 		if (currentAddress) {
 			this.updateVoices();
 			var textToBeSpoken = "";
 			textToBeSpoken += this.buildTextToSpeech(currentAddress);
-			console.log("textToBeSpoken:", textToBeSpoken);
+			log("textToBeSpoken:", textToBeSpoken);
 			this.textInput.value = textToBeSpoken;
 			this.speak(textToBeSpoken);
 		}
