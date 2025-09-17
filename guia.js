@@ -1,3 +1,16 @@
+// Semantic Versioning 2.0.0 - see https://semver.org/
+// Version object for unstable development status
+const guiaVersion = {
+  major: 0,
+  minor: 1,
+  patch: 0,
+  prerelease: 'alpha', // Indicates unstable development
+  toString: function() {
+    return `${this.major}.${this.minor}.${this.patch}-${this.prerelease}`;
+  }
+};
+
+
 // Haversine distance calculation between two coordinates
 function calculateDistance(lat1, lon1, lat2, lon2) {
 	const R = 6371e3; // Earth radius in meters
@@ -28,15 +41,18 @@ const log = (message, ...params) => {
   }
 };
 
-const warn = (message) => {
-  console.warn(message);
+const warn = (message, ...params) => {
+  console.warn(message, ...params);
   if (typeof document !== 'undefined') {
     const logContainer = document.getElementById("bottom-scroll-textarea");
     if (logContainer) {
-      logContainer.innerHTML += `${message}\n`;
+      logContainer.innerHTML += `${message} ${params.join(" ")}\n`;
     }
   }
 };
+
+// Example usage:
+log("Guia.js version:", guiaVersion.toString());
 
 /* ============================
  * Camada de Modelo
@@ -118,7 +134,7 @@ class CurrentPosition {
 	update(position) {
 		log("-----------------------------------------");
 		log("(CurrentPosition) CurrentPosition.update");
-		log("(CurrentPosition) this.tsPosicaoAtual:", this.tsPosicaoAtual);
+		log("(CurrentPosition) this.tsPosPosicaoAtual:", this.tsPosicaoAtual);
 		log("(CurrentPosition) position:", position);
 
 		var bUpdateCurrPos = true;
