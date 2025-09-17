@@ -2,7 +2,7 @@
 // Version object for unstable development status
 const guiaVersion = {
   major: 0,
-  minor: 1,
+  minor: 2,
   patch: 0,
   prerelease: 'alpha', // Indicates unstable development
   toString: function() {
@@ -1146,6 +1146,164 @@ class EnderecoPadronizado {
 	}
 }
 
+class GeoDataParser {
+	constructor(data) {
+		console.log("Initializing GeoDataParser...");
+		this.data = data;
+	}
+
+	parse() {
+		console.log("Parsing geo data...");
+		// Implement parsing logic here
+		log("(GeoDataParser) Check if there is reference place.");
+		this.referencePlace = GeoDataExtractor.isReferencePlace(this.data) ? new ReferencePlace(this.data) : null;
+	}
+}
+
+class GeoDataExtractor {
+	constructor(data) {
+		console.log("Initializing GeoDataExtractor...");
+		this.data = data;
+	}
+
+	extract() {
+		console.log("Extracting geo data...");
+		// Implement extraction logic here
+	}
+
+	static isReferencePlace(data) {
+		log("(GeoDataExtractor) Check if address data belong to a reference place.");
+		return ReferencePlaceExtractor.isReferencePlace(data);
+	}
+}
+
+class GeoDataValidator {
+	constructor(data) {
+		console.log("Initializing GeoDataValidator...");
+		this.data = data;
+	}
+
+	validate() {
+		console.log("Validating geo data...");
+		// Implement validation logic here
+	}
+}
+
+class GeoDataFormatter {
+	constructor(data) {
+		console.log("Initializing GeoDataFormatter...");
+		this.data = data;
+	}
+
+	format() {
+		console.log("Formatting geo data...");
+		// Implement formatting logic here
+	}
+}
+
+class GeoDataPresenter {
+	constructor(element) {
+		console.log("Initializing GeoDataPresenter...");
+		this.element = element;
+	}
+
+	present(data) {
+		console.log("Presenting geo data...");
+		// Implement presentation logic here
+	}
+}	
+
+class ReferencePlaceExtractor {
+	constructor(data) {
+		console.log("Initializing ReferencePlaceExtractor...");
+		this.data = data;
+		this.extract();
+		Object.freeze(this);
+	}
+
+	extract() {
+		console.log("Extracting reference place data...");
+		// Implement extraction logic here
+		this.placeClass = this.data["class"];
+		this.placeType = this.data["type"];
+		this.placeName = this.data["name"];
+	}
+
+	static isReferencePlace(data) {
+		let validRefPlaceClasses = ['shop'];
+		let refPlaceClass = (new ReferencePlaceExtractor(data)).placeClass;
+		log(`(ReferencePlaceExtractor) class: ${refPlaceClass}`)
+		return validRefPlaceClasses.includes(refPlaceClass);
+	}
+}
+
+class ReferencePlaceValidator {
+	constructor(data) {
+		console.log("Initializing ReferencePlaceValidator...");
+		this.data = data;
+	}
+
+	validate() {
+		console.log("Validating reference place data...");
+		// Implement validation logic here
+	}
+}
+
+class ReferencePlaceFormatter {
+	constructor(data) {
+		console.log("Initializing ReferencePlaceFormatter...");
+		this.data = data;
+	}
+
+	format() {
+		console.log("Formatting reference place data...");
+		// Implement formatting logic here
+	}
+}
+
+class ReferencePlaceDisplayer {
+	constructor(element) {
+		console.log("Initializing ReferencePlaceDisplayer...");
+		this.element = element;
+	}	display(data) {
+		console.log("Displaying reference place data...");
+		// Implement display logic here
+	}
+}
+
+class ReferencePlace {
+	constructor(data) {
+		console.log("Initializing ReferencePlace...");
+		this.data = data;
+		this.extractor = new ReferencePlaceExtractor(data);
+		this.validator = new ReferencePlaceValidator(data);
+		this.formatter = new ReferencePlaceFormatter(data);
+		this.displayer = new ReferencePlaceDisplayer();
+		this.presenter = new ReferencePlacePresenter();
+		this.process();
+		Object.freeze(this); // Prevent further modification
+	}	
+	
+	process() {
+		console.log("Processing reference place data...");
+		// Implement processing logic here
+		this.placeClass = this.extractor.placeClass;
+		this.placdType = this.extractor.placeType;
+		this.placeName = this.extractor.placeName;
+
+		this.validator.validate();
+		this.formatter.format();
+		this.displayer.display();
+		//this.presenter.present();
+	}
+}
+class ReferencePlacePresenter {
+	constructor(element) {
+		console.log("Initializing ReferencePlacePresenter...");
+		this.element = element;
+	}
+}
+
 class AddressDataExtractor {
 	constructor(data) {
 		console.log("Initializing AddressDataExtractor...");
@@ -1218,8 +1376,8 @@ class HTMLAddressDisplayer {
 		Object.freeze(this); // Prevent further modification
 	}
 
-	renderAddress(data, enderecoPadronizado) {
-		console.log("(HTMLAddressDisplayer) Rendering address:", data);
+	renderAddress(geodataParser, enderecoPadronizado) {
+		console.log("(HTMLAddressDisplayer) Rendering address:", geodataParser.data);
 		console.log(
 			"(HTMLAddressDisplayer) enderecoPadronizado:",
 			enderecoPadronizado,
@@ -1231,21 +1389,25 @@ class HTMLAddressDisplayer {
 		// Return the generated HTML string
 
 		// Check if data is valid
-		if (!data || !data.address) {
+		if (!geodataParser.data || !geodataParser.data.address) {
 			return "<p class='error'>No address data available.</p>";
 		}
 
 		// Determine address type
 		var addressTypeDescr;
 
-		addressTypeDescr = getAddressType(data);
+		addressTypeDescr = getAddressType(geodataParser.data);
 
-		var html = "";
-
-		if (data.address) {
+		let html = "";
+		log('(HTMLAddressDisplayer) Check if there is reference place.');
+		if (geodataParser.referencePlace) {
+			log('(HTMLAddressDiplayer) Yes, there is a reference place.')
+			html +=  `<p><strong>Referência:</strong> ${geodataParser.referencePlace.placeName}</p>`;
+		}
+		if (geodataParser.data.address) {
 			html += `<p><strong>Tipo:</strong> ${addressTypeDescr}<br>`;
 			html += "<p><strong>Address Details:</strong></p><ul>";
-			for (const [key, value] of Object.entries(data.address)) {
+			for (const [key, value] of Object.entries(geodataParser.data.address)) {
 				html += `<li><strong>${key}:</strong> ${value}</li>`;
 			}
 			html += "</ul>";
@@ -1256,26 +1418,29 @@ class HTMLAddressDisplayer {
     <strong>Município/Cidade:</strong> ${enderecoPadronizado.municipio}<br>`;
 			}
 
-			html += `<p><strong>Detalhes do endereço (raw):</strong><br>
-	${data.address.road || data.address.street || ""} ${data.address.house_number || ""}<br>
-	${data.address.neighbourhood || data.address.suburb || ""}<br>
-    ${data.address.municipality}<br>
-    ${data.address.county}<br>
-    <strong>UF:</strong> ${data.address.state}<br>
-    <strong>Região:</strong> ${data.address.region}<br>
-    <strong>CEP:</strong> ${data.address.postcode}<br>
-    <strong>País:</strong> ${data.address.country}<br>
-    <strong>Código do país:</strong> ${data.address.country_code}<br>
-    <strong>Boundingbox</strong>: ${data.boundingbox} </p> `;
+			html += '<p>';
+			html += `<strong>Detalhes do endereço (raw):</strong><br>
+	${geodataParser.data.address.road || geodataParser.data.address.street || ""} ${geodataParser.data.address.house_number || ""}<br>
+	${geodataParser.data.address.neighbourhood || geodataParser.data.address.suburb || ""}<br>
+    ${geodataParser.data.address.municipality}<br>
+    ${geodataParser.data.address.county}<br>
+    <strong>UF:</strong> ${geodataParser.data.address.state}<br>
+    <strong>Região:</strong> ${geodataParser.data.address.region}<br>
+    <strong>CEP:</strong> ${geodataParser.data.address.postcode}<br>
+    <strong>País:</strong> ${geodataParser.data.address.country}<br>
+    <strong>Código do país:</strong> ${geodataParser.data.address.country_code}<br>
+    <strong>Boundingbox</strong>: ${geodataParser.data.boundingbox} </p> `;
 
-			html += `${JSON.stringify(data)}`;
+			html += `${JSON.stringify(geodataParser.data)}`;
 		}
 
 		return html;
 	}
 
 	displayAddress(data, enderecoPadronizado) {
-		var html = this.renderAddress(data, enderecoPadronizado);
+		let geodataParser = new GeoDataParser(data);
+		geodataParser.parse();
+		let html = this.renderAddress(geodataParser, enderecoPadronizado);
 		console.log("(HTMLAddressDisplayer) Address rendered.");
 		this.element.innerHTML += html;
 	}
@@ -1327,12 +1492,12 @@ function displayError(error) {
 			break;
 	}
 	locationResult.innerHTML = `<p class="error">Error: ${errorMessage}</p>`;
-	if (findRestaurantsBtn) {
+	/*if (findRestaurantsBtn) {
 		findRestaurantsBtn.disabled = true;
 	}
 	if (cityStatsBtn) {
 		cityStatsBtn.disabled = true;
-	}
+	}*/
 }
 
 /* ============================
