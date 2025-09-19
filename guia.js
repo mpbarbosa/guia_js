@@ -998,65 +998,64 @@ class Chronometer {
  */
 
 class HTMLPositionDisplayer {
-	constructor(element) {
-		console.log("Initializing HTMLPositionDisplayer...");
-		this.element = element;
-		Object.freeze(this); // Prevent further modification
-	}
+    constructor(element) {
+        console.log("Initializing HTMLPositionDisplayer...");
+        this.element = element;
+        Object.freeze(this); // Prevent further modification
+    }
 
-	renderHtmlCoords(position) {
-		console.log(
-			"(HTMLPositionDisplayer) Rendering HTML coordinates: " + position,
-		);
-		// Extract coordinates
-		// Format coordinates to 6 decimal places
-		// Display coordinates
-		// Provide link to Google Maps
-		// Provide link to Google Street View
-		if (!position || !position.coords) {
-			return "<p class='error'>No position data available.</p>";
-		}
-		const latitude = position.coords.latitude;
-		const longitude = position.coords.longitude;
-		const altitude = position.coords.altitude;
-		const precisao = position.coords.accuracy; // in meters
-		const precisaoAltitude = position.coords.altitudeAccuracy;
-		const direcao = position.coords.heading; // in degrees
-		const velocidade = position.coords.speed; // in meters per second
-		const timestamp = new Date(position.timestamp).toLocaleString();
-		var html = "";
-		if (latitude) {
-			html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}<br>`;
-		}
-		if (longitude) {
-			html += `<p><strong>Longitude:</strong> ${longitude.toFixed(6)}<br>`;
-		}
-		if (altitude) {
-			html += `<strong>Altitude</strong>: ${altitude.toFixed(2)} metros<br>`;
-		}
-		if (precisao) {
-			html += `<p><strong>Precisão:</strong> ±${Math.round(precisao)} metros</p>`;
-		}
-		if (precisaoAltitude) {
-			html += `<p><strong>Precisão da altitude:</strong> ±${Math.round(precisaoAltitude)} metros</p>`;
-		}
-		if (direcao) {
-			html += `<p><strong>Direção:</strong> ${direcao.toFixed(2)}°</p>`;
-		}
-		if (velocidade) {
-			html += `<p><strong>Velocidade:</strong> ${velocidade.toFixed(2)} m/s</p>`;
-		}
-		if (timestamp) {
-			html += `<p><strong>Timestamp:</strong> ${timestamp}</p>`;
-		}
+    renderHtmlCoords(position) {
+        console.log(
+            "(HTMLPositionDisplayer) Rendering HTML coordinates: " + position,
+        );
+        if (!position || !position.coords) {
+            return "<p class='error'>No position data available.</p>";
+        }
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        const altitude = position.coords.altitude;
+        const precisao = position.coords.accuracy; // in meters
+        const precisaoAltitude = position.coords.altitudeAccuracy;
+        const direcao = position.coords.heading; // in degrees
+        const velocidade = position.coords.speed; // in meters per second
+        const timestamp = new Date(position.timestamp).toLocaleString();
 
-		html += ` <p><a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a> 
-  <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${latitude},${longitude}">Ver no Google Street View</a></p> `;
+        let html = `<details class="coords-details" closed>
+            <summary><strong>Coordinates Details</strong></summary>`;
+        if (latitude) {
+            html += `<p><strong>Latitude:</strong> ${latitude.toFixed(6)}</p>`;
+        }
+        if (longitude) {
+            html += `<p><strong>Longitude:</strong> ${longitude.toFixed(6)}</p>`;
+        }
+        if (altitude) {
+            html += `<p><strong>Altitude:</strong> ${altitude.toFixed(2)} metros</p>`;
+        }
+        if (precisao) {
+            html += `<p><strong>Precisão:</strong> ±${Math.round(precisao)} metros</p>`;
+        }
+        if (precisaoAltitude) {
+            html += `<p><strong>Precisão da altitude:</strong> ±${Math.round(precisaoAltitude)} metros</p>`;
+        }
+        if (direcao) {
+            html += `<p><strong>Direção:</strong> ${direcao.toFixed(2)}°</p>`;
+        }
+        if (velocidade) {
+            html += `<p><strong>Velocidade:</strong> ${velocidade.toFixed(2)} m/s</p>`;
+        }
+        if (timestamp) {
+            html += `<p><strong>Timestamp:</strong> ${timestamp}</p>`;
+        }
+        html += `<p>
+            <a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank">Ver no Google Maps</a>
+            <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${latitude},${longitude}">Ver no Google Street View</a>
+        </p>
+        </details>`;
 
-		return html;
-	}
+        return html;
+    }
 
-	showCoords(position) {
+    showCoords(position) {
 		var html = this.renderHtmlCoords(position);
 		// Display coordinates first
 		const loc = `<div id="addressSection">
