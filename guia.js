@@ -2,7 +2,7 @@
 // Version object for unstable development status
 const guiaVersion = {
   major: 0,
-  minor: 2,
+  minor: 3,
   patch: 0,
   prerelease: 'alpha', // Indicates unstable development
   toString: function() {
@@ -1430,7 +1430,9 @@ class HTMLAddressDisplayer {
     <strong>Código do país:</strong> ${geodataParser.data.address.country_code}<br>
     <strong>Boundingbox</strong>: ${geodataParser.data.boundingbox} </p> `;
 
+			html += '<details close><summary>(Raw Data) Dados em formato JSON</summary>';
 			html += `${JSON.stringify(geodataParser.data)}`;
+			html += '</details>';
 		}
 
 		return html;
